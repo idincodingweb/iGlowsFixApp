@@ -405,3 +405,89 @@ saat build APK:
 | Chat error `401 / 403` | API key Groq sudah di-revoke / salah copy | Generate ulang di console Groq → update secret di GitHub → re-run workflow |
 | Chat error `429` terus | Free tier rate limit Groq habis | Daftarin `GROQ_API_KEY_2` (key kedua) sebagai fallback |
 | Chat tetap gagal padahal log build sukses inject key | APK lama belum di-uninstall | Uninstall dulu APK lama di HP, install APK baru hasil build terakhir |
+
+---
+
+## Milestone 3.5 — Progress & Notifikasi Real-time (Firestore)
+
+### Tujuan
+Hilangkan "dummy data feel" di Home & Notifikasi untuk user baru. Progress
+sekarang **nyata** (mengikuti aktivitas user) dan tersinkron ke Firestore
+per-UID, notifikasi pakai stream real-time dari Firestore (bukan list statis).
+
+### File yang diubah / dibuat
+- **NEW** `lib/services/firestore_sync.dart` — singleton sync layer ke
+  `users/{uid}/{routine_logs|skin_analyses|daily_scores|profile}`. Semua
+  call try/catch fail-safe (offline aman, UI tidak crash).
+- **NEW** `lib/services/notification_service.dart` — CRUD + `stream()`
+  real-time dari `users/{uid}/notifications`. Punya `dedupeKey` (anti spam
+  notifikasi sejenis dalam 24 jam) + auto-seed welcome notif waktu signup.
+- **UPDATE** `lib/models/notification_item.dart` — tambah field `id` & `kind`
+  (string: `welcome|streak|analyzer|routine|tips|promo`), plus
+  `fromMap/toMap` Firestore. Field `icon` di-derive dari `kind` di UI.
+- **UPDATE** `lib/services/sample_data.dart` — **drop** `sampleNotifications`
+  (sudah tidak dipakai, source notifikasi 100% dari Firestore stream).
+  Sample products & salons tetap (read-only katalog).
+- **UPDATE** `lib/services/local_store.dart` — semua SharedPreferences key
+  sekarang **scoped per Firebase UID** (`uid_routine_done_...`) → cegah
+  bocor data antar akun di device yg sama. Tiap mutasi mirror ke
+  `FirestoreSync` di background.
+- **UPDATE** `lib/services/skin_score_service.dart` — hapus default 60/Good.
+  User baru = `overall: 0`, `caption: 'Belum ada data'`, flag `hasData: false`
+  sampai ada minimal 1 sinyal (profile / routine log / analyzer scan).
+- **UPDATE** `lib/features/home/tabs/home_tab.dart` — handle empty state
+  (placeholder `—` / "Belum ada data" + CTA "Mulai rutinitas / scan").
+- **UPDATE** `lib/features/notifications/notifications_screen.dart` —
+  `StreamBuilder` ke `NotificationService.stream()`, auto mark-as-read on view,
+  icon di-derive dari `kind`.
+- **UPDATE** `lib/features/auth/auth_service.dart` — seed welcome notif
+  saat signup/first sign-in.
+- **UPDATE** `lib/features/home/tabs/routines_tab.dart` &
+  `lib/features/analyzer/analyzer_screen.dart` — trigger event Firestore
+  + notifikasi otomatis (streak milestone, hasil analyzer).
+
+### Auto-event yang sekarang nyata
+| Trigger | Tulis ke Firestore | Notifikasi |
+|---|---|---|
+| Signup | `users/{uid}/profile` | "Selamat datang di GlowCare ✨" (kind=welcome) |
+| Centang step routine | `users/{uid}/routine_logs/{date}` + update streak | Streak milestone (3/7/14/30 hari) |
+| Selesai skin analyzer | `users/{uid}/skin_analyses/{ts}` + update daily score | "Hasil skin analyzer siap 🪞" (kind=analyzer) |
+| Score harian berubah | `users/{uid}/daily_scores/{yyyy-MM-dd}` | — |
+| Sore/malam belum centang routine | — | Reminder lokal (kind=routine) |
+
+### Firebase Security Rules (WAJIB di-update sebelum publish)
+Rules lama `allow read, write: if false` akan **memblok** semua sync ini.
+Gunakan rules berikut di Firebase Console → Firestore → Rules → Publish:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /products/{id} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /salons/{id} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
+
+### Hotfix (Milestone 3.5.1)
+Build CI gagal `flutter analyze` setelah refactor `NotificationItem`
+(field `id` & `kind` jadi required, `icon` dihapus) sementara
+`lib/services/sample_data.dart` masih instantiate model versi lama
+→ 12 error `missing_required_argument` / `undefined_named_parameter`.
+
+**Fix:** hapus seluruh block `sampleNotifications` dari `sample_data.dart`
+(sudah tidak ada consumer-nya — notif source = Firestore stream). Hapus
+juga import `flutter/material.dart` & `notification_item.dart` yang jadi
+unused. File sekarang clean: hanya export `sampleProducts` & `sampleSalons`.

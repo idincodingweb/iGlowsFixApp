@@ -1,7 +1,5 @@
 import '../models/product.dart';
 import '../models/salon.dart';
-import '../models/notification_item.dart';
-import 'package:flutter/material.dart';
 
 const sampleProducts = <Product>[
   Product(id: 'p1', name: 'Hydra Glow Serum', brand: 'iGlows', category: 'Serum',
@@ -38,33 +36,4 @@ const sampleSalons = <Salon>[
     rating: 4.9, services: ['Facial','Laser','Peel'], priceTier: '\$\$\$', emoji: '🌷'),
   Salon(id: 's5', name: 'Soft Touch Studio', area: 'Beauty Street', distanceKm: 0.8,
     rating: 4.5, services: ['Nails','Lash'], priceTier: '\$', emoji: '💖'),
-];
-
-final sampleNotifications = <NotificationItem>[
-  NotificationItem(
-    title: 'Waktunya rutinitas malam ✨',
-    body: 'Yuk lanjut step skincare malam kamu biar streak tetap menyala!',
-    icon: Icons.nightlight_round,
-    time: DateTime.now().subtract(const Duration(minutes: 15)),
-  ),
-  NotificationItem(
-    title: 'Hasil skin analyzer siap 🪞',
-    body: 'Skor kulit kamu hari ini naik 4 poin. Lihat insight lengkapnya.',
-    icon: Icons.auto_awesome,
-    time: DateTime.now().subtract(const Duration(hours: 3)),
-  ),
-  NotificationItem(
-    title: 'Glowy punya tips baru 💬',
-    body: 'Coba niacinamide 10% untuk redain pori — tanya Glowy sekarang.',
-    icon: Icons.chat_bubble_rounded,
-    time: DateTime.now().subtract(const Duration(hours: 8)),
-    unread: false,
-  ),
-  NotificationItem(
-    title: 'Promo Pink Petal Spa 🌸',
-    body: 'Diskon 20% facial minggu ini. Booking di tab Salon.',
-    icon: Icons.local_offer_outlined,
-    time: DateTime.now().subtract(const Duration(days: 1)),
-    unread: false,
-  ),
 ];
