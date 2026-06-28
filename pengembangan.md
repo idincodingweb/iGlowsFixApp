@@ -348,8 +348,60 @@ didistribusikan ke pengguna nyata. Tiga fitur inti pada milestone ini:
 - Tambah `http: ^1.2.2` di `pubspec.yaml`.
 
 ### Catatan rilis
-- API key Groq saat ini hardcoded di `groq_service.dart` (sesuai permintaan
-  user). Untuk distribusi produksi, dianjurkan memindah ke `--dart-define`
-  atau Remote Config sebelum publish.
+- API key Groq dibaca via `--dart-define` (GitHub Secret), di-bake ke APK
+  saat build di GitHub Actions. Tidak ada lagi hardcoded key di source.
 - Dummy data lain (Products, Salon, Sample analyzer) masih ada dan akan
   diganti secara bertahap pada milestone berikutnya.
+
+---
+
+## Hotfix — AI Chat Selalu Gagal Respon (2026-06-28)
+
+### Gejala
+- Setiap kirim chat ke Glowy selalu gagal / muncul pesan "Key belum di-set".
+- Sudah ganti API key Groq berkali-kali tetap gagal.
+
+### Akar Masalah (yang sebenarnya)
+1. `lib/services/groq_service.dart` versi sebelumnya **masih menembak Google
+   Apps Script proxy** (`GLOWY_PROXY_URL`) — bukan endpoint Groq langsung.
+   Jadi walau API key fresh, request tidak pernah sampai ke Groq.
+2. `String.fromEnvironment(...)` adalah **compile-time constant**. Kalau
+   `flutter build apk` dijalankan tanpa flag `--dart-define=GROQ_API_KEY_1=...`,
+   nilainya = string kosong → app langsung lempar "Key belum di-set" sebelum
+   sempat hit Groq. Mengganti API key di console Groq tidak akan menolong
+   selama flag ini belum di-inject saat build.
+
+### Perbaikan
+- **`lib/services/groq_service.dart`** — buang seluruh kode proxy + redirect
+  follower. Sekarang POST langsung ke
+  `https://api.groq.com/openai/v1/chat/completions` dengan header
+  `Authorization: Bearer <key>`. Baca `GROQ_API_KEY_1` (wajib) &
+  `GROQ_API_KEY_2` (opsional, fallback) via `String.fromEnvironment`.
+  Rotasi otomatis: jika key #1 kena `401 / 403 / 429`, langsung coba key #2.
+- **`.github/workflows/build-apk.yml`** — step `flutter build apk` sekarang
+  mem-forward `secrets.GROQ_API_KEY_1` & `secrets.GROQ_API_KEY_2` jadi
+  `--dart-define`, sehingga value-nya di-bake ke binary APK saat compile.
+
+### Setup Wajib di GitHub (one-time)
+Owner perlu daftarin secret di repo GitHub agar workflow bisa inject key
+saat build APK:
+
+1. Buka repo di GitHub → **Settings → Secrets and variables → Actions**.
+2. Klik **New repository secret**, tambahkan:
+   - `GROQ_API_KEY_1` = API key Groq #1 (**wajib**)
+   - `GROQ_API_KEY_2` = API key Groq #2 (opsional, fallback bila #1 limit)
+3. Push ulang / jalanin workflow `build-apk.yml` dari tab Actions.
+4. Download APK hasil build dari Actions → install di HP → AI Glowy jalan.
+
+> Catatan penting: GitHub Secret **hanya dipakai saat build APK**
+> (compile-time), bukan diambil app saat runtime. Setelah APK jadi, key
+> sudah nempel di dalam binary — app tidak perlu komunikasi ke GitHub
+> sama sekali saat dipakai user.
+
+### Troubleshooting
+| Gejala | Penyebab | Fix |
+|---|---|---|
+| "Key belum di-set" muncul lagi | Workflow build tidak menginject `--dart-define` (secret belum dibuat / nama salah / typo) | Cek log step "Build APK" di Actions — pastikan ada `--dart-define=GROQ_API_KEY_1=***`. Pastikan nama secret persis `GROQ_API_KEY_1` |
+| Chat error `401 / 403` | API key Groq sudah di-revoke / salah copy | Generate ulang di console Groq → update secret di GitHub → re-run workflow |
+| Chat error `429` terus | Free tier rate limit Groq habis | Daftarin `GROQ_API_KEY_2` (key kedua) sebagai fallback |
+| Chat tetap gagal padahal log build sukses inject key | APK lama belum di-uninstall | Uninstall dulu APK lama di HP, install APK baru hasil build terakhir |
