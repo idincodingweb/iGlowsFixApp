@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../models/chat_message.dart';
+import '../models/skin_profile.dart';
+
 class GroqException implements Exception {
   final String message;
   final int? code;
@@ -23,6 +26,13 @@ class GroqService {
   GroqService({http.Client? client}) : _client = client ?? http.Client();
 
   void dispose() => _client.close();
+
+  /// Sapaan awal Glowy yang ditampilkan saat layar konsultasi pertama dibuka.
+  String greeting() {
+    return 'Hai bestie! ✨ Aku Glowy, AI Beauty Assistant kamu. '
+        'Cerita dong soal kulit kamu — mau bahas jerawat, kulit kering, '
+        'kusam, atau racikan routine yang pas? Aku bantu pelan-pelan ya 💖';
+  }
 
   /// Apps Script /exec membalas 302 redirect ke script.googleusercontent.com.
   /// http.post default follow redirect TAPI body POST hilang → harus manual.
@@ -48,7 +58,6 @@ class GroqService {
         final loc = resp.headers['location'];
         if (loc == null) return resp;
         current = Uri.parse(loc);
-        // 303 & 302 (umum di Apps Script) → ikuti pakai GET tanpa body
         if (resp.statusCode == 302 || resp.statusCode == 303) {
           method = 'GET';
           sendBody = null;
@@ -60,7 +69,44 @@ class GroqService {
     throw GroqException('Terlalu banyak redirect', code: 310);
   }
 
-  Future<String> chat(List<Map<String, String>> messages) async {
+  /// High-level chat: terima riwayat ChatMessage + profil kulit, susun
+  /// system prompt persona Glowy + konteks profil, lalu kirim ke proxy.
+  Future<String> chat({
+    required List<ChatMessage> history,
+    SkinProfile? profile,
+  }) async {
+    final messages = <Map<String, String>>[
+      {'role': 'system', 'content': _buildSystemPrompt(profile)},
+      for (final m in history)
+        {
+          'role': m.fromUser ? 'user' : 'assistant',
+          'content': m.text,
+        },
+    ];
+    return _sendMessages(messages);
+  }
+
+  String _buildSystemPrompt(SkinProfile? p) {
+    final sb = StringBuffer()
+      ..writeln(
+          'Kamu adalah "Glowy", AI Beauty Assistant berbahasa Indonesia yang ramah, '
+          'hangat, dan suportif seperti sahabat. Gunakan sapaan "bestie", emoji '
+          'secukupnya (✨💖🌸), dan jawaban ringkas (maks 5-7 kalimat). '
+          'Fokus: skincare, routine, bahan aktif, dan rekomendasi praktis. '
+          'Jika menyangkut kondisi medis serius, sarankan konsultasi ke dokter kulit.');
+    if (p != null) {
+      sb
+        ..writeln('\nKonteks pengguna:')
+        ..writeln('- Nama: ${p.name ?? "-"}')
+        ..writeln('- Umur: ${p.age}')
+        ..writeln('- Jenis kulit: ${p.skinType}')
+        ..writeln('- Concerns: ${p.concerns.isEmpty ? "-" : p.concerns.join(", ")}')
+        ..writeln('- Goal: ${p.goal}');
+    }
+    return sb.toString();
+  }
+
+  Future<String> _sendMessages(List<Map<String, String>> messages) async {
     if (_kProxyUrl.isEmpty) {
       throw GroqException(
         'GLOWY_PROXY_URL belum di-set. Build pakai --dart-define=GLOWY_PROXY_URL=...',
