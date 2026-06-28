@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import '../../services/notification_service.dart';
+
 class AuthService {
   FirebaseAuth get _auth => FirebaseAuth.instance;
   FirebaseFirestore get _db => FirebaseFirestore.instance;
@@ -15,10 +17,15 @@ class AuthService {
     );
   }
 
-  Future<UserCredential> signIn(String email, String password) {
+  Future<UserCredential> signIn(String email, String password) async {
     _ensureFirebaseReady();
-    return _auth.signInWithEmailAndPassword(
+    final cred = await _auth.signInWithEmailAndPassword(
         email: email.trim(), password: password);
+    // Pastikan welcome notification ada (fail-safe).
+    try {
+      await NotificationService.instance.seedWelcomeIfNeeded();
+    } catch (_) {}
+    return cred;
   }
 
   Future<UserCredential> signUp({
@@ -35,6 +42,10 @@ class AuthService {
       'email': email.trim(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // Seed welcome notification untuk user baru.
+    try {
+      await NotificationService.instance.seedWelcomeIfNeeded();
+    } catch (_) {}
     return cred;
   }
 

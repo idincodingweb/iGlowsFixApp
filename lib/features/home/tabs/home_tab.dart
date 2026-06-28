@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/glow_widgets.dart';
 import '../../../services/local_store.dart';
+import '../../../services/notification_service.dart';
 import '../../../services/skin_score_service.dart';
 import '../../../models/skin_profile.dart';
 import '../../../models/routine_step.dart';
@@ -47,6 +48,23 @@ class _HomeTabState extends State<HomeTab> {
         _streak = s;
         _score = score;
       });
+      // Welcome notif (idempotent) + reminder malam kalau night routine
+      // belum kelar dan sudah lewat jam 19:00 lokal.
+      try {
+        await NotificationService.instance.seedWelcomeIfNeeded();
+        final now = DateTime.now();
+        final nightDone = nightRoutine.every((st) => d.contains(st.id));
+        if (now.hour >= 19 && !nightDone) {
+          final dk = '${now.year}-${now.month}-${now.day}';
+          await NotificationService.instance.add(
+            title: 'Waktunya rutinitas malam ✨',
+            body:
+                'Yuk lanjut step skincare malam kamu biar streak tetap menyala!',
+            kind: 'routine',
+            dedupeKey: 'routine_night_$dk',
+          );
+        }
+      } catch (_) {/* safe */}
     } catch (_) {/* safe */}
   }
 
@@ -61,13 +79,16 @@ class _HomeTabState extends State<HomeTab> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final score = _score?.overall ?? 60;
-    final caption = _score?.caption ?? 'Good';
+    final hasData = _score?.hasData ?? false;
+    final score = hasData ? (_score?.overall ?? 0) : 0;
+    final caption = _score?.caption ?? 'Belum ada data';
     final updatedLabel = _score == null
-        ? '✨ Calculating...'
-        : (_score!.hasAnalyzer
-            ? '✨ Updated from your last scan'
-            : '✨ Updated just now');
+        ? '✨ Memuat...'
+        : (!hasData
+            ? '✨ Mulai rutinitas / scan untuk lihat skor kamu'
+            : (_score!.hasAnalyzer
+                ? '✨ Update dari scan terakhir'
+                : '✨ Update dari aktivitas kamu'));
     final name = _greetingName();
 
     return Scaffold(
@@ -147,11 +168,11 @@ class _HomeTabState extends State<HomeTab> {
                                   color: AppColors.textSecondary)),
                           const SizedBox(height: 10),
                           _miniMetric(Icons.water_drop, 'Hydration',
-                              _score?.hydration.rating ?? 'Good'),
+                              _score?.hydration.rating ?? '-'),
                           _miniMetric(Icons.spa, 'Smoothness',
-                              _score?.smoothness.rating ?? 'Good'),
+                              _score?.smoothness.rating ?? '-'),
                           _miniMetric(Icons.wb_sunny_outlined, 'Brightness',
-                              _score?.brightness.rating ?? 'Good'),
+                              _score?.brightness.rating ?? '-'),
                         ],
                       ),
                     ),

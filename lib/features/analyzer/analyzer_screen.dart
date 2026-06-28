@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/analyzer_service.dart';
 import '../../services/local_store.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/glow_widgets.dart';
 
 class AnalyzerScreen extends StatefulWidget {
@@ -57,6 +58,15 @@ class _AnalyzerScreenState extends State<AnalyzerScreen>
           'wrinkles': r.wrinkles,
           'overallScore': r.overallScore,
         });
+        final now = DateTime.now();
+        final dk = '${now.year}-${now.month}-${now.day}';
+        await NotificationService.instance.add(
+          title: 'Hasil skin analyzer siap 🪞',
+          body:
+              'Skor kulit kamu: ${r.overallScore}. Buka tab Home untuk lihat insight lengkapnya.',
+          kind: 'analyzer',
+          dedupeKey: 'analyzer_$dk',
+        );
       } catch (_) {/* fail-safe */}
     } catch (e) {
       if (mounted) setState(() => _scanning = false);

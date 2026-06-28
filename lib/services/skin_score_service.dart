@@ -9,8 +9,9 @@ class SkinMetric {
   final int value; // 0..100
   const SkinMetric({required this.label, required this.value});
 
-  /// "Excellent" / "Great" / "Good" / "Fair" / "Low"
+  /// "Excellent" / "Great" / "Good" / "Fair" / "Low" / "-"
   String get rating {
+    if (value <= 0) return '-';
     if (value >= 85) return 'Excellent';
     if (value >= 72) return 'Great';
     if (value >= 58) return 'Good';
@@ -20,13 +21,14 @@ class SkinMetric {
 }
 
 class DailySkinScore {
-  final int overall; // 0..100
-  final String caption; // Glowing / Great / Good / Needs care
+  final int overall; // 0..100 (0 = belum ada data)
+  final String caption;
   final SkinMetric hydration;
   final SkinMetric smoothness;
   final SkinMetric brightness;
   final DateTime computedAt;
   final bool hasAnalyzer;
+  final bool hasData;
 
   const DailySkinScore({
     required this.overall,
@@ -36,6 +38,7 @@ class DailySkinScore {
     required this.brightness,
     required this.computedAt,
     required this.hasAnalyzer,
+    required this.hasData,
   });
 
   Map<String, dynamic> toJson() => {
@@ -46,31 +49,39 @@ class DailySkinScore {
         'brightness': brightness.value,
         'computedAt': computedAt.toIso8601String(),
         'hasAnalyzer': hasAnalyzer,
+        'hasData': hasData,
       };
 
   static DailySkinScore fromJson(Map<String, dynamic> j) => DailySkinScore(
-        overall: (j['overall'] as num?)?.toInt() ?? 60,
-        caption: (j['caption'] as String?) ?? 'Good',
+        overall: (j['overall'] as num?)?.toInt() ?? 0,
+        caption: (j['caption'] as String?) ?? 'Belum ada data',
         hydration: SkinMetric(
             label: 'Hydration',
-            value: (j['hydration'] as num?)?.toInt() ?? 60),
+            value: (j['hydration'] as num?)?.toInt() ?? 0),
         smoothness: SkinMetric(
             label: 'Smoothness',
-            value: (j['smoothness'] as num?)?.toInt() ?? 60),
+            value: (j['smoothness'] as num?)?.toInt() ?? 0),
         brightness: SkinMetric(
             label: 'Brightness',
-            value: (j['brightness'] as num?)?.toInt() ?? 60),
-        computedAt:
-            DateTime.tryParse(j['computedAt'] as String? ?? '') ?? DateTime.now(),
+            value: (j['brightness'] as num?)?.toInt() ?? 0),
+        computedAt: DateTime.tryParse(j['computedAt'] as String? ?? '') ??
+            DateTime.now(),
         hasAnalyzer: (j['hasAnalyzer'] as bool?) ?? false,
+        hasData: (j['hasData'] as bool?) ??
+            (((j['overall'] as num?)?.toInt() ?? 0) > 0),
       );
 }
 
-/// Menghitung Daily Skin Score secara deterministik dari:
-/// - SkinProfile (jenis kulit & jumlah concern)
+/// Menghitung Daily Skin Score berdasarkan data REAL user:
+/// - SkinProfile (opsional)
 /// - Routine completion hari ini (morning + night)
 /// - Streak (loyalitas)
-/// - Hasil analyzer terakhir (jika ada, di-blend)
+/// - Hasil analyzer terakhir (opsional)
+///
+/// Jika user belum punya sinyal apa pun (profil belum diisi, belum scan,
+/// belum mengerjakan satu pun step rutin, streak 0) maka score balikin
+/// `hasData=false` dan semua nilai 0 — UI menampilkan placeholder, BUKAN
+/// angka dummy.
 class SkinScoreService {
   SkinScoreService({LocalStore? store}) : _store = store ?? LocalStore();
   final LocalStore _store;
@@ -81,20 +92,11 @@ class SkinScoreService {
       if (cached != null) {
         try {
           final s = DailySkinScore.fromJson(cached);
-          // Cache valid kalau dihitung di hari yg sama.
           final now = DateTime.now();
           if (s.computedAt.year == now.year &&
               s.computedAt.month == now.month &&
               s.computedAt.day == now.day) {
-            // Tetap recompute kalau jumlah routine done berubah signifikan.
-            final done = await _store.loadRoutineDone();
-            final total = morningRoutine.length + nightRoutine.length;
-            final expectedBonus =
-                ((done.length / total).clamp(0.0, 1.0) * 100).round();
-            // Cek loose: kalau hydration berubah > 5 anggap stale.
-            if ((s.hydration.value - expectedBonus).abs() < 60) {
-              return s;
-            }
+            return s;
           }
         } catch (_) {/* recompute */}
       }
@@ -104,6 +106,27 @@ class SkinScoreService {
     final done = await _store.loadRoutineDone();
     final streak = await _store.getStreak();
     final analyzer = await _store.loadLastAnalyzer();
+
+    final hasData = profile != null ||
+        analyzer != null ||
+        done.isNotEmpty ||
+        streak > 0;
+
+    if (!hasData) {
+      final empty = DailySkinScore(
+        overall: 0,
+        caption: 'Belum ada data',
+        hydration: const SkinMetric(label: 'Hydration', value: 0),
+        smoothness: const SkinMetric(label: 'Smoothness', value: 0),
+        brightness: const SkinMetric(label: 'Brightness', value: 0),
+        computedAt: DateTime.now(),
+        hasAnalyzer: false,
+        hasData: false,
+      );
+      await _store.saveDailyScore(empty.toJson());
+      return empty;
+    }
+
     final score = _calc(
       profile: profile,
       doneIds: done,
@@ -120,18 +143,18 @@ class SkinScoreService {
     required int streak,
     required Map<String, dynamic>? analyzer,
   }) {
-    // ---- Base dari jenis kulit ----
+    // Base berasal dari profil — kalau profil belum diisi, base = 0.
     final baseByType = <String, int>{
-      'Normal': 72,
-      'Kombinasi': 66,
-      'Berminyak': 62,
-      'Kering': 60,
-      'Sensitif': 58,
+      'Normal': 50,
+      'Kombinasi': 46,
+      'Berminyak': 44,
+      'Kering': 42,
+      'Sensitif': 40,
     };
-    final base = baseByType[profile?.skinType ?? 'Kombinasi'] ?? 65;
+    final base =
+        profile == null ? 0 : (baseByType[profile.skinType] ?? 45);
     final concernPenalty = (profile?.concerns.length ?? 0) * 2;
 
-    // ---- Routine factor ----
     final totalSteps = morningRoutine.length + nightRoutine.length;
     final doneMorning =
         morningRoutine.where((s) => doneIds.contains(s.id)).length;
@@ -139,12 +162,10 @@ class SkinScoreService {
         nightRoutine.where((s) => doneIds.contains(s.id)).length;
     final routineRatio =
         ((doneMorning + doneNight) / totalSteps).clamp(0.0, 1.0);
-    final routineBonus = (routineRatio * 18).round(); // 0..18
+    final routineBonus = (routineRatio * 28).round(); // 0..28
 
-    // ---- Streak factor ----
-    final streakBonus = (min(streak, 14) * 0.7).round(); // 0..10
+    final streakBonus = (min(streak, 14) * 0.8).round(); // 0..11
 
-    // ---- Analyzer blend ----
     int analyzerOverall = 0;
     int aHydration = 0;
     int aSmooth = 0;
@@ -163,12 +184,12 @@ class SkinScoreService {
 
     int overall = base - concernPenalty + routineBonus + streakBonus;
     if (hasAnalyzer) {
-      overall = ((overall * 0.55) + (analyzerOverall * 0.45)).round();
+      overall = ((overall * 0.5) + (analyzerOverall * 0.5)).round();
     }
-    overall = overall.clamp(30, 100);
+    overall = overall.clamp(1, 100);
 
-    // ---- Per-metric ----
     int hydration = _metricBase(
+      hasProfile: profile != null,
       profileBoost: profile?.skinType == 'Kering' ? -8 : 0,
       analyzerValue: hasAnalyzer ? aHydration : null,
       routineSignals: [
@@ -181,6 +202,7 @@ class SkinScoreService {
     );
 
     int smoothness = _metricBase(
+      hasProfile: profile != null,
       profileBoost: (profile?.concerns
                   .any((c) => c.toLowerCase().contains('jerawat')) ??
               false)
@@ -197,6 +219,7 @@ class SkinScoreService {
     );
 
     int brightness = _metricBase(
+      hasProfile: profile != null,
       profileBoost: (profile?.concerns
                   .any((c) => c.toLowerCase().contains('kusam')) ??
               false)
@@ -204,7 +227,7 @@ class SkinScoreService {
           : 0,
       analyzerValue: hasAnalyzer ? aBright : null,
       routineSignals: [
-        if (doneIds.contains('serum_am')) 8, // Vit C
+        if (doneIds.contains('serum_am')) 8,
         if (doneIds.contains('spf_am')) 10,
         if (doneIds.contains('moist_pm')) 3,
       ],
@@ -219,27 +242,31 @@ class SkinScoreService {
       brightness: SkinMetric(label: 'Brightness', value: brightness),
       computedAt: DateTime.now(),
       hasAnalyzer: hasAnalyzer,
+      hasData: true,
     );
   }
 
   int _metricBase({
+    required bool hasProfile,
     required int profileBoost,
     required int? analyzerValue,
     required List<int> routineSignals,
     required int streak,
   }) {
-    int v = 60 + profileBoost;
+    int v = hasProfile ? (40 + profileBoost) : 0;
     for (final s in routineSignals) {
       v += s;
     }
-    v += (min(streak, 10) * 0.6).round();
+    v += (min(streak, 10) * 0.8).round();
     if (analyzerValue != null) {
-      v = ((v * 0.55) + (analyzerValue * 0.45)).round();
+      v = ((v * 0.5) + (analyzerValue * 0.5)).round();
     }
-    return v.clamp(20, 100);
+    if (v <= 0) return 0;
+    return v.clamp(5, 100);
   }
 
   String _caption(int v) {
+    if (v <= 0) return 'Belum ada data';
     if (v >= 85) return 'Glowing';
     if (v >= 72) return 'Great';
     if (v >= 58) return 'Good';

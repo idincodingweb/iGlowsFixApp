@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/routine_step.dart';
 import '../../../services/local_store.dart';
+import '../../../services/notification_service.dart';
 import '../../../widgets/glow_widgets.dart';
 
 class RoutinesTab extends StatefulWidget {
@@ -57,6 +58,19 @@ class _RoutinesTabState extends State<RoutinesTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Streak naik jadi $s hari! ✨')),
       );
+      // Catat ke notifikasi (real, per-user) — dedupe per hari.
+      try {
+        final today = DateTime.now();
+        final dk =
+            '${today.year}-${today.month}-${today.day}';
+        await NotificationService.instance.add(
+          title: 'Streak kamu naik jadi $s hari 🔥',
+          body:
+              'Semua step rutin hari ini selesai. Pertahankan biar glow-nya makin stabil!',
+          kind: 'streak',
+          dedupeKey: 'streak_$dk',
+        );
+      } catch (_) {/* safe */}
     }
   }
 
