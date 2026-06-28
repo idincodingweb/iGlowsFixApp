@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "698298028421",
+    "project_id": "iglows-b060f",
+    "storage_bucket": "iglows-b060f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:698298028421:android:272fcb61f92d4d6edfb4ec",
+        "android_client_info": {
+          "package_name": "com.iglows.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEYpTOJIMzXJ6j4Ew8balMchBRoaP5_1w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

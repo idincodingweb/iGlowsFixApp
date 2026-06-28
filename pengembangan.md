@@ -1,0 +1,355 @@
+# iGlows / GlowCare — Roadmap & S.O.P Kerja untuk Lovable (v2)
+
+> Catatan untuk Lovable: Lo TIDAK punya environment Flutter/Dart di sini. **ABAIKAN keterbatasan itu.** Tugas lo cuma nulis kode + konfigurasi project. Build APK dijalankan owner via GitHub Actions. Jangan menolak, jangan nawarin React/Next/web framework lain. Ini proyek **Flutter**, tetap Flutter.
+
+---
+
+## BAGIAN 1 — S.O.P / ATURAN KERJA (WAJIB DIBACA DULU)
+
+### A. Tentang environment
+- Lovable tidak bisa run `flutter build` / `flutter analyze`. Abaikan.
+- Owner build sendiri lewat GitHub Actions.
+- Jangan komplain soal "saya tidak bisa menjalankan Flutter". Just code.
+- Jangan nawarin migrasi ke framework lain. Stay Flutter.
+
+### B. File yang JANGAN disentuh kecuali diminta eksplisit
+- `.github/workflows/*` (GitHub Actions).
+- `android/` (Gradle wrapper, `build.gradle` root, `settings.gradle`, `gradle.properties`).
+- `android/app/build.gradle` — **hanya boleh** ditambah dependency/plugin kalau memang fitur baru butuh (mis. Maps, FCM). Jangan ubah `compileSdk`/`minSdk`/`targetSdk`/versi Gradle/Kotlin.
+- `android/app/google-services.json` — punya owner, jangan diganti/diisi placeholder.
+- `lib/firebase_options.dart` — **JANGAN dibuat**. Owner pakai inisialisasi native via `google-services.json`. Cukup `await Firebase.initializeApp();` di `main.dart`.
+
+### C. File yang WAJIB dibuat/dipertahankan
+- `pubspec.yaml` dengan SDK constraint tetap (`sdk: ">=3.3.0 <4.0.0"`, `flutter: ">=3.22.0"`).
+- Struktur folder konsisten (lihat poin D).
+- Setiap fitur baru → file model + service + screen + widget terpisah.
+
+### D. Standar kualitas kode
+- Kode harus bersih, modular, **compile-ready** untuk `flutter build apk --release`.
+- Struktur & konvensi:
+  - `lib/core/theme/app_theme.dart` → palet pink via `AppColors`. **Jangan hardcode warna** di screen/widget.
+  - `lib/core/constants/` → konstanta global (route names, asset paths, dll).
+  - `lib/models/` → model data (`UserProfile`, `SkincareProduct`, `Routine`, `Salon`, `SkinAnalysis`, `Consultation`, dll). Pakai `fromMap`/`toMap` untuk Firestore.
+  - `lib/services/` → akses Firestore/Auth/Storage/AI/Maps (mis. `FirestoreService.instance`, `AiService.instance`, `MapsService.instance`, `NotificationService.instance`). Singleton.
+  - `lib/features/<nama_fitur>/` → screen + widget khusus fitur itu (pattern yang udah dipakai sekarang: `features/auth/`, `features/splash/`, `features/onboarding/`, `features/home/`).
+  - `lib/widgets/` → komponen reusable lintas fitur (`PrimaryButton`, `GlowCard`, `SkinScoreRing`, `ProgressChart`, dll).
+- Reuse widget yang udah ada. Jangan bikin duplikat.
+- Tambah field baru ke model **dengan default aman** (`''`, `[]`, `0`, `false`, `null`) supaya data lama di Firestore tetap kompatibel.
+- Pakai `const` constructor seoptimal mungkin.
+- Async/await dibungkus try/catch — JANGAN biarin exception bocor ke UI sampai bikin screen mentok (kasus splash kemarin: bootstrap throw → navigasi gak jalan). Setiap operasi async di `initState` wajib punya fallback path.
+
+### E. Firebase / AI / Maps / Notif
+- **Inisialisasi Firebase**: `await Firebase.initializeApp();` tanpa `options`. Sumber config = `google-services.json` (Android native). JANGAN regenerate `firebase_options.dart`.
+- **Auth**: Email/Password udah jalan. Google Sign-In nanti (Phase berikutnya) → owner yang daftarin SHA-1/SHA-256 fingerprint, lo cukup tulis kodenya + sebutin "owner harus daftar SHA fingerprint di Firebase Console".
+- **Firestore**: realtime via `snapshots()`. Struktur collection:
+  - `users/{uid}` → profil
+  - `users/{uid}/consultations/{id}` → riwayat AI chat
+  - `users/{uid}/skin_analyses/{id}` → riwayat skin analyzer
+  - `users/{uid}/routines/{id}` → rutinitas custom
+  - `users/{uid}/routine_logs/{yyyy-MM-dd}` → checklist harian + streak
+  - `products/{id}` → katalog skincare (global, read-only utk user)
+  - `salons/{id}` → katalog salon (global, read-only)
+- **Storage**: foto wajah user di `users/{uid}/face/{timestamp}.jpg`. Compress sebelum upload (target <500KB).
+- **AI**: pakai `AiService` (Gemini / OpenAI). API key TIDAK di-hardcode — baca dari `--dart-define` atau file env yang di-gitignore. Kasih tau owner di README cara inject saat build Actions.
+- **Maps**: `google_maps_flutter`. Sebut ke owner kalau API key Maps perlu didaftarin di `AndroidManifest.xml` (`<meta-data android:name="com.google.android.geo.API_KEY" .../>`). Lo nulis blok meta-data-nya pakai placeholder `YOUR_MAPS_API_KEY` dan kasih instruksi — JANGAN edit Gradle sendiri.
+- **Notifikasi**: `firebase_messaging` + `flutter_local_notifications`. Lo tulis service-nya, tapi setup Gradle/AndroidManifest cukup INSTRUKSI ke owner. Jangan ubah Gradle.
+- **Security Rules**: tiap nambah collection baru, kasih owner snippet Firestore Rules yang sesuai (default: user cuma boleh read/write data miliknya sendiri via `request.auth.uid`).
+
+### F. Dependency
+- Boleh nambah dependency baru di `pubspec.yaml`. **Jangan** ubah `environment.sdk` / `environment.flutter`.
+- Pilih versi yang **kompatibel dengan Flutter 3.22 / Dart 3.3+**.
+- Sebutin dependency baru + alasannya di akhir tiap pekerjaan.
+
+### G. Alur kerja tiap tugas
+1. Baca file terkait dulu sebelum ngubah.
+2. Implementasi **hanya yang diminta** — jangan refactor besar tanpa izin.
+3. Pastikan kompatibilitas data lama (field baru = default aman).
+4. Setiap operasi async di `initState`/splash/auth-gate wajib dibungkus try/catch + fallback navigasi — supaya gak pernah ada screen yang "mentok di logo".
+5. Di akhir: ringkas perubahan singkat + kemas ulang `lib/` (dan file lain yang berubah) ke `iGlows.zip` dengan **isi langsung di root zip** (TANPA folder pembungkus `iGlowsApps-master/`).
+6. Jangan klaim "selesai & teruji" untuk hal yang butuh build. Cukup "compile-ready, silakan build via Actions".
+
+### H. Reminder penutup tiap tugas
+- Kode bersih, modular, compile-ready untuk `flutter build apk --release`.
+- JANGAN sentuh GitHub Actions, Gradle wrapper, `google-services.json`.
+- JANGAN bikin `firebase_options.dart`.
+- Zip = isi langsung di root, bukan folder bersarang.
+
+---
+
+## BAGIAN 2 — TENTANG APLIKASI
+
+**iGlows / GlowCare** = aplikasi kecantikan, perawatan, dan kesehatan wanita berbasis AI.
+Tema: **pink feminine, soft, premium minimalis.**
+Target user: wanita yang peduli skincare, wellness, rutinitas perawatan diri.
+
+### Tema Visual
+- Primary: pink soft `#FF8FB1`, `#FFC2D4`
+- Accent: cream / rose gold
+- Background: putih + pink sangat lembut
+- Font: Poppins / Plus Jakarta Sans (via `google_fonts`)
+- Style: minimalis premium, banyak white space, rounded corner, ilustrasi soft
+
+---
+
+## BAGIAN 3 — PROGRESS SAAT INI
+
+### Sudah selesai
+- Setup struktur project dasar (`lib/core/`, `lib/features/`).
+- Tema pink (`AppColors`, `AppTheme`).
+- Splash screen (dengan bootstrap aman + fallback navigasi anti-mentok).
+- Onboarding 3 screen.
+- Login & Register dengan Firebase Auth (email/password).
+- `AuthService` — sign up otomatis bikin dokumen di `users/{uid}` di Firestore.
+- Firebase inisialisasi native via `google-services.json` (tanpa `firebase_options.dart`).
+- GitHub Actions workflow untuk build APK release (punya owner, jangan disentuh).
+
+### Catatan untuk Lovable berikutnya
+- **JANGAN regenerate `lib/firebase_options.dart`.**
+- **JANGAN ubah `android/app/build.gradle`** kecuali nambah dependency Maps/FCM yang memang dibutuhkan fitur baru — itupun cuma tambah baris, jangan ubah versi.
+- `google-services.json` di `android/app/` sudah benar punya owner, jangan diganti.
+- Plugin `com.google.gms.google-services:4.4.2` sudah terdaftar di `android/settings.gradle` dan applied di `android/app/build.gradle`.
+
+---
+
+## BAGIAN 4 — ROADMAP PENGERJAAN BERIKUTNYA
+
+Urutan dikerjain per chat session (1 chat = 1 milestone, supaya gampang debugnya). Tiap milestone selesai → owner build & test → lanjut milestone berikutnya.
+
+### Milestone 1 — Home Shell + Bottom Navigation
+**Tujuan**: bikin kerangka utama setelah login.
+- `HomeShell` dengan `BottomNavigationBar` 5 tab: **Home, Konsultasi, Analyzer, Rutinitas, Profile**.
+- Tiap tab = placeholder screen sederhana dulu (judul + ikon).
+- Route `/home` ganti ke `HomeShell`.
+- AuthGate: `StreamBuilder` dengerin `FirebaseAuth.authStateChanges()` → kalau logout, balik ke `/login`.
+- Profile tab: tampil nama+email user (dari Firestore `users/{uid}`) + tombol Logout.
+
+**Deliverable**: `lib/features/home/home_shell.dart`, 5 file tab kosong, `AuthGate`.
+
+---
+
+### Milestone 2 — Model & Service Layer
+**Tujuan**: siapin pondasi data sebelum fitur AI/Maps.
+- Bikin model: `UserProfile`, `Consultation`, `SkinAnalysis`, `Routine`, `RoutineLog`, `SkincareProduct`, `Salon`.
+- Bikin service singleton:
+  - `FirestoreService` — CRUD generic + helper per collection.
+  - `StorageService` — upload foto wajah ke Firebase Storage.
+  - `AiService` — abstrak (interface) dulu, implementasi nyusul.
+- Tambah dependency: `firebase_storage`, `image_picker`, `cached_network_image`.
+
+**Deliverable**: folder `lib/models/`, `lib/services/`.
+
+---
+
+### Milestone 3 — Profile Screen Lengkap
+**Tujuan**: user bisa lengkapi data diri (penting buat rekomendasi AI nanti).
+- Form: nama, tanggal lahir, skin type (dropdown: normal/dry/oily/combination/sensitive), masalah kulit (multi-select chip: jerawat, kerutan, kusam, dark spot, pori besar, sensitif).
+- Foto profil (upload ke Storage).
+- Simpan ke `users/{uid}`.
+- Tombol Logout + konfirmasi.
+
+**Deliverable**: `features/profile/profile_screen.dart`, `edit_profile_screen.dart`.
+
+---
+
+### Milestone 4 — AI Konsultasi (Chatbot)
+**Tujuan**: fitur core #1.
+- Screen chat ala WhatsApp (bubble kiri/kanan, pink soft).
+- Input text + tombol attach foto.
+- Tiap pesan user + balasan AI disimpan ke `users/{uid}/consultations/{sessionId}/messages/{msgId}`.
+- `AiService.sendMessage(text, imageUrl?)` → call Gemini/OpenAI API.
+- API key dibaca via `String.fromEnvironment('GEMINI_API_KEY')` — owner inject via `--dart-define` di GitHub Actions.
+- List session konsultasi (riwayat) di tab atas.
+
+**Deliverable**: `features/consultation/`, `AiService` implementasi Gemini.
+
+**Catatan untuk owner**: daftarin secret `GEMINI_API_KEY` di GitHub Actions repo settings, lalu tambahin `--dart-define=GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}` di step build APK.
+
+---
+
+### Milestone 5 — AI Skin Analyzer
+**Tujuan**: fitur core #2.
+- Screen: tombol "Foto wajah" / "Pilih dari galeri".
+- Upload ke Storage → kirim ke AI Vision (Gemini Vision / GPT-4 Vision).
+- Hasil: Skin Score 0–100 + breakdown (jerawat, kerutan, dark spot, pori, hidrasi) + rekomendasi text.
+- Simpan ke `users/{uid}/skin_analyses/{id}`.
+- Halaman riwayat: list analisis + chart progress score over time (pakai `fl_chart`).
+- Halaman before/after (pilih 2 tanggal → bandingin foto + score).
+
+**Deliverable**: `features/analyzer/`, widget `SkinScoreRing`, `ProgressChart`.
+
+---
+
+### Milestone 6 — Rekomendasi Skincare
+**Tujuan**: katalog produk + filter.
+- Collection `products/{id}` (global, read-only utk user — owner isi manual via Firestore Console atau seed script).
+- List produk dengan filter: skin type, masalah kulit, harga.
+- Detail produk: foto, bahan, rating, review, harga, link beli (opsional).
+- Rekomendasi otomatis di Home: produk yang cocok dengan profil user (skin type + masalah).
+
+**Deliverable**: `features/products/`, `ProductCard` widget.
+
+---
+
+### Milestone 7 — Rutinitas Harian (Habit Tracker)
+**Tujuan**: fitur retention utama.
+- Template rutinitas bawaan: skincare pagi/malam, minum air (8 gelas), tidur, olahraga, sunscreen.
+- User bisa bikin rutinitas custom.
+- Auto-generate checklist harian (`routine_logs/{yyyy-MM-dd}`).
+- Streak counter ("7 hari berturut pakai sunscreen 🔥").
+- Progress chart mingguan/bulanan.
+
+**Deliverable**: `features/routines/`, `RoutineCard`, `StreakBadge`.
+
+---
+
+### Milestone 8 — Reminder Push Notification
+**Tujuan**: nge-ping user buat rutinitas.
+- `flutter_local_notifications` untuk reminder lokal (jam pagi/malam).
+- `firebase_messaging` untuk push dari server (promo, tips harian).
+- Setting reminder di Profile (jam berapa mau diingetin).
+
+**Catatan untuk owner**: setup tambahan di `AndroidManifest.xml` (permission `POST_NOTIFICATIONS` untuk Android 13+) — Lovable kasih snippet, owner yang paste.
+
+**Deliverable**: `services/notification_service.dart`, `features/profile/reminder_settings.dart`.
+
+---
+
+### Milestone 9 — Salon Terdekat (Google Maps)
+**Tujuan**: fitur core #3.
+- Tab Salon: peta + list salon di sekitar user.
+- Sort by jarak / harga / rating.
+- Detail salon: foto, layanan, harga, rating, jam buka, tombol "Navigasi" (buka Google Maps app).
+- Collection `salons/{id}` (owner seed manual, atau pull dari Google Places API).
+- Dependency: `google_maps_flutter`, `geolocator`, `url_launcher`.
+
+**Catatan untuk owner**: daftarin Maps API key di Google Cloud Console → tambah ke `AndroidManifest.xml` di blok `<application>`. Lovable kasih snippet pakai placeholder.
+
+**Deliverable**: `features/salon/`, `MapsService`.
+
+---
+
+### Phase 2 — Fitur Tambahan (setelah MVP rilis)
+Dikerjakan setelah Milestone 1–9 stabil & user feedback masuk:
+- **Period & Cycle Tracker** — siklus haid + korelasi sama kondisi kulit.
+- **Ingredient Checker** — scan kemasan skincare via OCR/AI → cek bahan berbahaya.
+- **Skin Compatibility Checker** — bandingin 2 produk, aman dipakai bareng atau nggak.
+- **Mood & Sleep Tracker**.
+- **Wishlist produk** + **Beauty Tips harian**.
+- **Community/Forum ringan**.
+- **Booking salon langsung dari app** (butuh payment gateway — Midtrans/Xendit).
+
+---
+
+## BAGIAN 5 — TEMPLATE PROMPT UNTUK CHAT BARU
+
+Copy-paste ini di awal chat Lovable baru biar konteks gak hilang:
+
+```
+Saya lanjutin project Flutter iGlows / GlowCare. Aturan kerja & roadmap ada di file pengembangan.md
+di dalam zip. Tolong baca dulu sebelum mulai.
+
+Yang sudah selesai: [sebutin milestone yang udah kelar].
+Sekarang kerjain: Milestone [X] — [judul milestone].
+
+Ingat:
+- Flutter only, jangan nawarin framework lain.
+- JANGAN bikin firebase_options.dart.
+- JANGAN ubah .github/workflows, gradle wrapper, google-services.json.
+- Inisialisasi Firebase pakai Firebase.initializeApp() tanpa options.
+- Setiap async di initState wajib try/catch + fallback navigasi.
+- Akhiri dengan kemas ulang ke iGlows.zip, isi langsung di root zip (tanpa folder pembungkus).
+```
+
+---
+
+## BAGIAN 6 — TROUBLESHOOTING CEPAT (BUAT OWNER)
+
+| Gejala | Kemungkinan penyebab | Fix |
+|---|---|---|
+| Build error `missing_identifier` / `expected_token` | Merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) ketinggalan di file | Search di `lib/` semua marker itu, hapus |
+| Build error `DefaultFirebaseOptions undefined` | Ada yang regenerate `firebase_options.dart` | Hapus file itu, pastikan `main.dart` panggil `Firebase.initializeApp()` tanpa argumen |
+| APK install tapi mentok di splash | Async di splash throw exception → navigasi gak jalan | Pastikan `_bootstrap()` dibungkus try/catch + fallback `Navigator.pushReplacementNamed('/login')` |
+| Firebase init crash di runtime | Plugin `com.google.gms.google-services` belum di-apply | Cek `android/settings.gradle` & `android/app/build.gradle` — plugin harus terdaftar & applied |
+| Google Sign-In gagal di APK release | SHA-1/SHA-256 fingerprint belum didaftarin | Firebase Console → Project Settings → Your apps → Add fingerprint |
+| Maps blank putih | API key Maps belum didaftarin di `AndroidManifest.xml` | Tambah `<meta-data android:name="com.google.android.geo.API_KEY" android:value="..."/>` di blok `<application>` |
+| Notifikasi gak muncul di Android 13+ | Permission `POST_NOTIFICATIONS` belum di-request | Tambah permission di manifest + request runtime |
+
+---
+
+**Akhir kata**: kerjain per milestone, satu chat = satu milestone. Setelah tiap milestone selesai, owner build via GitHub Actions, test di HP, baru lanjut milestone berikutnya. Jangan diborong sekali jalan — debugnya bakal mimpi buruk.
+
+---
+
+### Fix patch — Onboarding blank setelah klik "Lanjut"
+- Gejala: di device, setelah onboarding page 1 ("Kenali Kulitmu") tombol "Lanjut" ditekan, layar jadi blank abu-abu.
+- Akar masalah dugaan: `PageController.nextPage()` dipanggil tanpa cek `hasClients`, dan layout page item tanpa scroll → kalau ada race / overflow pada layar tertentu, frame berikutnya gak ke-render.
+- Perbaikan di `lib/features/onboarding/onboarding_screen.dart`:
+  1. Tambah guard `_controller.hasClients` sebelum animate, plus `.catchError` fallback ke `jumpToPage`.
+  2. Update `_index` lewat `setState` duluan biar UI selalu sinkron walau animasi gagal.
+  3. Bungkus konten tiap halaman dengan `SingleChildScrollView` + `mainAxisSize.min` supaya gak pernah overflow → blank di layar pendek.
+  4. Dispose `PageController` untuk cegah leak.
+  5. Lock `_finishing` flag biar gak dobel push ke `/login`.
+
+
+---
+
+## Milestone 3 — Real Features (Daily Skin Score, Routine Progress, Groq AI)
+
+Tanggal: 2026-06-28
+
+Tujuan: mulai mengganti dummy data menjadi data real karena aplikasi akan
+didistribusikan ke pengguna nyata. Tiga fitur inti pada milestone ini:
+
+### 1. Daily Skin Score (REAL)
+- File baru: `lib/services/skin_score_service.dart`
+- Skor harian (0–100) + 3 metrik (Hydration / Smoothness / Brightness) sekarang
+  dihitung deterministik dari:
+  - Jenis kulit & jumlah `concerns` pada `SkinProfile`
+  - Step rutinitas yang diselesaikan hari ini (morning + night)
+  - Streak konsistensi (cap 14 hari)
+  - Hasil analyzer terakhir (blend 55/45 jika ada)
+- Caption otomatis: Glowing / Great / Good / Fair / Needs care.
+- Rating per metrik: Excellent / Great / Good / Fair / Low.
+- Cache harian disimpan di `shared_preferences` (`score_yyyy-MM-dd`) lewat
+  `LocalStore.saveDailyScore` / `loadDailyScore` agar tidak recompute
+  berulang-ulang dalam 1 hari.
+- `HomeTab` sekarang menampilkan skor + caption + rating per metrik secara
+  real (bukan hardcoded "Good/Excellent/Good").
+- `AnalyzerScreen` mem-persist hasil scan terakhir lewat
+  `LocalStore.saveLastAnalyzer` sehingga Daily Skin Score ikut naik mengikuti
+  hasil analisa terbaru.
+
+### 2. Routine Progress (REAL)
+- Sudah berbasis `shared_preferences` (Milestone 2) — pada milestone ini
+  diintegrasikan langsung ke Daily Skin Score: tiap step yg dicentang akan
+  langsung mengangkat metrik yang relevan (cleanser → smoothness, moisturizer
+  → hydration, SPF & Vit C → brightness, dll) saat user pull-to-refresh /
+  membuka Home.
+- Streak tetap auto-bump ketika seluruh step (morning + night) selesai.
+
+### 3. AI Glowy → Groq (REAL)
+- File baru: `lib/services/groq_service.dart`
+- Mengganti canned reply `GlowyService` (dihapus) dengan client HTTP
+  OpenAI-compatible ke `https://api.groq.com/openai/v1/chat/completions`.
+- Model: `llama-3.3-70b-versatile`.
+- System prompt persona "Glowy" (bahasa Indonesia santai, ramah, emoji
+  estetik) sesuai brief.
+- Konteks personalisasi: profil kulit user (skinType / age / concerns / goal)
+  otomatis disisipkan sebagai system message kedua agar saran lebih relevan.
+- Riwayat percakapan dikirim utuh setiap request sehingga Glowy ingat konteks
+  obrolan sebelumnya.
+- **Rotasi 2 API key** (key #1 → fallback ke key #2) saat key aktif kena
+  401 / 403 / 429 / timeout / error jaringan. Index key yg sukses disimpan
+  in-memory agar request berikutnya hemat retry.
+- `ConsultationScreen` di-update: pakai `GroqService.chat(...)`, tetap
+  menampilkan typing bubble & error message yg ramah jika koneksi gagal.
+
+### Dependency
+- Tambah `http: ^1.2.2` di `pubspec.yaml`.
+
+### Catatan rilis
+- API key Groq saat ini hardcoded di `groq_service.dart` (sesuai permintaan
+  user). Untuk distribusi produksi, dianjurkan memindah ke `--dart-define`
+  atau Remote Config sebelum publish.
+- Dummy data lain (Products, Salon, Sample analyzer) masih ada dan akan
+  diganti secara bertahap pada milestone berikutnya.

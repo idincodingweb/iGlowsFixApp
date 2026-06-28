@@ -1,0 +1,9 @@
+{
+  "name": "iGlows",
+  "short_name": "iGlows",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFF9FB",
+  "theme_color": "#FF8FB1",
+  "description": "iGlows skincare companion app."
+}
