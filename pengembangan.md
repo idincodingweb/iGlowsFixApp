@@ -491,3 +491,112 @@ Build CI gagal `flutter analyze` setelah refactor `NotificationItem`
 (sudah tidak ada consumer-nya — notif source = Firestore stream). Hapus
 juga import `flutter/material.dart` & `notification_item.dart` yang jadi
 unused. File sekarang clean: hanya export `sampleProducts` & `sampleSalons`.
+
+---
+
+## Milestone 4 — AI Konsultasi (Multimodal + Riwayat Sesi)
+
+Tanggal: 2026-06-29
+
+### Tujuan
+Naikin fitur Konsultasi dari single-thread jadi **multi-session** dengan
+riwayat tersimpan di Firestore + dukungan **lampirin foto** (multimodal)
+biar Glowy bisa kasih saran berbasis visual kulit.
+
+### File yang diubah / dibuat
+- **NEW** `lib/services/consultation_service.dart` — singleton CRUD sesi
+  konsultasi ke `users/{uid}/consultations/{sessionId}` dan
+  `users/{uid}/consultations/{sessionId}/messages/{msgId}`.
+  Auto-generate judul sesi dari pesan user pertama (≤40 char).
+  Stream realtime untuk list sesi & list pesan per sesi.
+- **UPDATE** `lib/models/chat_message.dart` — tambah field `id`,
+  `imageBase64`, `imageMime` (nullable, default aman) supaya kompatibel
+  dengan data lama. `toMap/fromMap` untuk Firestore.
+- **UPDATE** `lib/services/groq_service.dart` — `chat(...)` sekarang multimodal:
+  pesan user yang punya `imageBase64` dikirim sebagai `image_url` (data URL
+  base64) ke endpoint Groq, model auto-switch ke
+  `meta-llama/llama-4-scout-17b-16e-instruct` (vision-capable) saat ada
+  attachment, fallback ke `llama-3.3-70b-versatile` untuk text-only.
+  Tambah method `analyzeSkin(imageBase64, mime, profile)` yang return
+  JSON terstruktur (dipakai Milestone 5).
+- **UPDATE** `lib/features/consultation/consultation_screen.dart` — revamp:
+  - Layar awal = **daftar sesi konsultasi** (judul + preview pesan terakhir +
+    timestamp), tombol "+" untuk sesi baru.
+  - Detail sesi = chat bubble multimodal (gambar + teks). Tombol attach
+    membuka bottom sheet: **Kamera** atau **Galeri** (`image_picker`).
+  - Foto di-compress (maxWidth/Height 1024, quality 75) → base64 → disimpan
+    inline di Firestore (no Storage setup, tetap di dalam SOP).
+
+### Catatan teknis
+- Image disimpan sebagai **base64 di Firestore** (bukan Firebase Storage)
+  agar tidak perlu konfigurasi Storage Rules / Gradle tambahan sesuai
+  S.O.P. Compression menjaga ukuran dokumen << 1 MB (limit Firestore).
+- Riwayat percakapan tetap dikirim utuh ke Groq tiap request (Glowy ingat
+  konteks lintas pesan dalam 1 sesi).
+
+### Dependency
+- Tambah `image_picker: ^1.1.2` di `pubspec.yaml`.
+
+---
+
+## Milestone 5 — AI Skin Analyzer (Real Vision + Riwayat + Before/After)
+
+Tanggal: 2026-06-29
+
+### Tujuan
+Ganti simulasi skin analyzer jadi **AI Vision real** via Groq
+(`meta-llama/llama-4-scout-17b-16e-instruct`), simpan riwayat per scan,
+tampilkan progress chart, dan sediakan Before/After comparator.
+
+### File yang diubah / dibuat
+- **UPDATE** `lib/services/analyzer_service.dart` — `scanWithImage(...)`
+  call `GroqService.analyzeSkin` (vision) lalu mapping ke `AnalyzerResult`
+  dengan field `fromAi: true`. `simulate()` dipertahankan sebagai
+  **fallback** ketika user tidak upload foto / koneksi gagal / API error.
+- **NEW** `lib/services/analyzer_history_service.dart` — Firestore service
+  untuk `users/{uid}/skin_analyses/{autoId}`. Simpan hasil scan + thumbnail
+  base64 + `createdAt: serverTimestamp`. Provide `stream(limit:60)` dan
+  `list(limit:60)` untuk dipakai history & compare screen.
+- **UPDATE** `lib/features/analyzer/analyzer_screen.dart` — full rewrite:
+  - Tombol **"Mulai Scan Wajah"** buka bottom sheet pilihan
+    **Kamera (front)** / **Galeri**.
+  - Loading overlay scan animation (custom painter pink sweep) saat AI
+    memproses gambar.
+  - Hasil scan: skin type, overall score 0–100, 5 metrik bar
+    (Hydration / Oiliness / Acne / Dark Spots / Wrinkles) + rekomendasi
+    AI dinamis. Indikator `fromAi=false` ditampilkan jelas kalau lagi
+    pakai fallback estimasi.
+  - Auto-save ke `AnalyzerHistoryService` + `LocalStore.saveLastAnalyzer`
+    (supaya Daily Skin Score di Home ikut ke-update) + kirim notifikasi
+    `kind=analyzer` (`dedupeKey` per tanggal).
+  - AppBar action: **Riwayat** & **Before/After**.
+- **NEW** `lib/features/analyzer/analyzer_history_screen.dart` — list semua
+  scan + **LineChart `fl_chart`** progress overall score over time.
+- **NEW** `lib/features/analyzer/analyzer_compare_screen.dart` —
+  Before/After: 2 slot foto (default oldest vs newest), bisa pilih tanggal
+  manual via bottom sheet. Tampilkan diff per metrik (Overall, Hydration,
+  Acne, Dark Spots, Wrinkles) dengan tanda warna naik/turun (reverse logic
+  untuk metrik yang lebih kecil = lebih baik).
+
+### Catatan teknis
+- Front camera default (`preferredCameraDevice: CameraDevice.front`) sesuai
+  use-case scan wajah.
+- Image compression sama dengan Milestone 4 (≤1024px, quality 75).
+- Foto thumbnail di-base64-kan dan disimpan dalam dokumen scan-nya
+  sendiri — re-render history & before/after instan tanpa fetch tambahan.
+- Daily Skin Score otomatis terangkat karena `LocalStore.saveLastAnalyzer`
+  tetap dipanggil → blend 55/45 di `SkinScoreService` (Milestone 3) jalan
+  sesuai design.
+
+### Dependency
+- Tambah `fl_chart: ^0.69.0` di `pubspec.yaml` (progress chart).
+- `image_picker` di-share dengan Milestone 4.
+
+### Catatan untuk owner
+- Tidak perlu setup Firebase Storage — semua image inline base64 di
+  Firestore (kompatibel dengan SOP "jangan sentuh Gradle / google-services").
+- Permission kamera/galeri ditangani otomatis oleh `image_picker` lewat
+  intent picker bawaan Android — tidak perlu edit `AndroidManifest.xml`.
+- Firestore Security Rules Milestone 3.5 sudah meng-cover path
+  `users/{uid}/consultations/**` dan `users/{uid}/skin_analyses/**`
+  (rule wildcard `users/{uid}/{document=**}`).
