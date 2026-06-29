@@ -1,24 +1,36 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_theme.dart';
+import '../services/rapid_maps_service.dart';
 
-/// Widget embed Google Maps tanpa API key.
+/// Widget peta yang nge-render Street View dari RapidAPI
+/// `google-map-places.p.rapidapi.com/maps/api/streetview`.
 ///
-/// Pakai endpoint publik `https://maps.google.com/maps?...&output=embed`
-/// yang nge-render mini map interaktif via WebView. Sesuai SOP M9:
-/// gak butuh Google Cloud billing / API key Maps.
+/// API key dibaca dari `--dart-define=RAPIDAPI_KEY=...` (di-inject GitHub
+/// Actions dari GitHub Secret saat build). Kalau key belum ada / request
+/// gagal, widget jatuh ke fallback aman + tombol "Buka di Google Maps"
+/// supaya UX tetep jalan.
 ///
-/// Dua mode:
-/// - [MapEmbed.coords] kalau punya lat/lng pasti.
-/// - [MapEmbed.query]  kalau cuma punya nama tempat/alamat.
+/// API publik widget (`MapEmbed.coords` / `MapEmbed.query`) DIPERTAHANKAN
+/// sama persis biar pemanggil (salon screen / detail) gak perlu diubah.
 class MapEmbed extends StatefulWidget {
-  final String url;
+  final String? coordsLocation; // "lat,lng" untuk RapidAPI
+  final String? queryLocation;  // teks bebas
+  final double? lat;
+  final double? lng;
+  final String? query;
   final double height;
   final BorderRadius borderRadius;
 
   const MapEmbed._({
-    required this.url,
+    this.coordsLocation,
+    this.queryLocation,
+    this.lat,
+    this.lng,
+    this.query,
     required this.height,
     required this.borderRadius,
   });
@@ -27,14 +39,14 @@ class MapEmbed extends StatefulWidget {
     Key? key,
     required double lat,
     required double lng,
-    int zoom = 15,
+    int zoom = 15, // dipertahankan utk kompat — tidak dipakai RapidAPI.
     double height = 200,
     BorderRadius? borderRadius,
   }) {
-    final url =
-        'https://maps.google.com/maps?q=$lat,$lng&z=$zoom&hl=id&output=embed';
     return MapEmbed._(
-      url: url,
+      coordsLocation: '$lat,$lng',
+      lat: lat,
+      lng: lng,
       height: height,
       borderRadius: borderRadius ?? BorderRadius.circular(20),
     );
@@ -43,14 +55,13 @@ class MapEmbed extends StatefulWidget {
   factory MapEmbed.query({
     Key? key,
     required String query,
-    int zoom = 14,
+    int zoom = 14, // kompat — tidak dipakai RapidAPI.
     double height = 200,
     BorderRadius? borderRadius,
   }) {
-    final q = Uri.encodeComponent(query.trim().isEmpty ? 'salon' : query);
-    final url = 'https://maps.google.com/maps?q=$q&z=$zoom&hl=id&output=embed';
     return MapEmbed._(
-      url: url,
+      queryLocation: query,
+      query: query,
       height: height,
       borderRadius: borderRadius ?? BorderRadius.circular(20),
     );
@@ -61,44 +72,61 @@ class MapEmbed extends StatefulWidget {
 }
 
 class _MapEmbedState extends State<MapEmbed> {
-  WebViewController? _controller;
+  Uint8List? _bytes;
   bool _loading = true;
   bool _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _load();
   }
 
-  void _init() {
+  Future<void> _load() async {
     try {
-      final c = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(AppColors.cream)
-        ..setNavigationDelegate(NavigationDelegate(
-          onPageFinished: (_) {
-            if (mounted) setState(() => _loading = false);
-          },
-          onWebResourceError: (_) {
-            if (mounted) {
-              setState(() {
-                _failed = true;
-                _loading = false;
-              });
-            }
-          },
-        ))
-        ..loadRequest(Uri.parse(widget.url));
-      _controller = c;
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _failed = true;
-          _loading = false;
-        });
+      // Pixel size mengikuti tinggi widget supaya proporsional di layar.
+      final h = widget.height.round().clamp(200, 640);
+      final w = (h * 1.6).round().clamp(320, 960);
+
+      Uint8List? bytes;
+      if (widget.coordsLocation != null) {
+        bytes = await RapidMapsService.instance.fetchStreetViewByCoords(
+          lat: widget.lat ?? 0,
+          lng: widget.lng ?? 0,
+          width: w,
+          height: h,
+        );
+      } else {
+        bytes = await RapidMapsService.instance.fetchStreetViewByQuery(
+          query: widget.query ?? '',
+          width: w,
+          height: h,
+        );
       }
+
+      if (!mounted) return;
+      setState(() {
+        _bytes = bytes;
+        _failed = bytes == null;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _failed = true;
+        _loading = false;
+      });
     }
+  }
+
+  Future<void> _openExternal() async {
+    final q = widget.coordsLocation ?? widget.query ?? '';
+    if (q.isEmpty) return;
+    final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(q)}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 
   @override
@@ -107,20 +135,50 @@ class _MapEmbedState extends State<MapEmbed> {
       borderRadius: widget.borderRadius,
       child: SizedBox(
         height: widget.height,
+        width: double.infinity,
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            if (_controller != null && !_failed)
-              Positioned.fill(child: WebViewWidget(controller: _controller!))
+            if (_bytes != null && !_failed)
+              Image.memory(_bytes!, fit: BoxFit.cover, gaplessPlayback: true)
             else
-              const _MapFallback(),
-            if (_loading && !_failed)
-              const Positioned.fill(
-                child: ColoredBox(
-                  color: Color(0x11FF8FB1),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primary,
-                      strokeWidth: 2,
+              _MapFallback(onOpen: _openExternal),
+            if (_loading)
+              const ColoredBox(
+                color: Color(0x11FF8FB1),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+            if (_bytes != null && !_failed)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Material(
+                  color: Colors.white.withValues(alpha: .9),
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _openExternal,
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.open_in_new,
+                              size: 14, color: AppColors.primary),
+                          SizedBox(width: 4),
+                          Text('Maps',
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -133,20 +191,30 @@ class _MapEmbedState extends State<MapEmbed> {
 }
 
 class _MapFallback extends StatelessWidget {
-  const _MapFallback();
+  final VoidCallback? onOpen;
+  const _MapFallback({this.onOpen});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.cream,
       alignment: Alignment.center,
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.map_outlined, color: AppColors.primary, size: 36),
-          SizedBox(height: 6),
-          Text('Map gak bisa dimuat',
+          const Icon(Icons.map_outlined,
+              color: AppColors.primary, size: 36),
+          const SizedBox(height: 6),
+          const Text('Preview map belum tersedia',
               style: TextStyle(color: AppColors.textSecondary)),
+          if (onOpen != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Buka di Google Maps'),
+            ),
+          ],
         ],
       ),
     );

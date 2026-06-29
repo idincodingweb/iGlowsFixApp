@@ -44,10 +44,12 @@ jobs:
         env:
           GROQ_API_KEY_1: ${{ secrets.GROQ_API_KEY_1 }}
           GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
           flutter build apk --release \
             --dart-define=GROQ_API_KEY_1=$GROQ_API_KEY_1 \
-            --dart-define=GROQ_API_KEY_2=$GROQ_API_KEY_2
+            --dart-define=GROQ_API_KEY_2=$GROQ_API_KEY_2 \
+            --dart-define=RAPIDAPI_KEY=$RAPIDAPI_KEY
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
