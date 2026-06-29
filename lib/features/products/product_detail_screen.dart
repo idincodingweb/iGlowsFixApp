@@ -15,19 +15,43 @@ class ProductDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Container(
-            height: 220,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primarySoft.withValues(alpha: .6),
-                  AppColors.cream,
-                ],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              height: 240,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primarySoft.withValues(alpha: .6),
+                    AppColors.cream,
+                  ],
+                ),
               ),
+              alignment: Alignment.center,
+              child: product.imageUrl.isNotEmpty
+                  ? Image.network(
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (_, child, prog) {
+                        if (prog == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                            strokeWidth: 2,
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Text(
+                        product.emoji,
+                        style: const TextStyle(fontSize: 110),
+                      ),
+                    )
+                  : Text(product.emoji,
+                      style: const TextStyle(fontSize: 110)),
             ),
-            alignment: Alignment.center,
-            child: Text(product.emoji, style: const TextStyle(fontSize: 110)),
           ),
           const SizedBox(height: 16),
           Text(product.category,
@@ -101,7 +125,7 @@ class ProductDetailScreen extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Masuk keranjang ✨')));
+                        content: Text('Fitur ini akan segera tersedia')));
                   },
                   icon: const Icon(Icons.shopping_bag_outlined),
                   label: const Text('Beli Sekarang'),

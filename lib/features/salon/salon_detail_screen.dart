@@ -60,6 +60,12 @@ class SalonDetailScreen extends StatelessWidget {
               Text(' ${salon.rating}', style: tt.bodyMedium),
             ],
           ),
+          if (salon.address.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(salon.address,
+                style: tt.bodySmall
+                    ?.copyWith(color: AppColors.textSecondary)),
+          ],
           const SizedBox(height: 16),
           // Embed Google Maps (tanpa API key).
           salon.hasCoords

@@ -1,36 +1,29 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_theme.dart';
-import '../services/rapid_maps_service.dart';
 
-/// Widget peta yang nge-render Street View dari RapidAPI
-/// `google-map-places.p.rapidapi.com/maps/api/streetview`.
+/// Widget peta yang nge-render static map dari OpenStreetMap (tanpa API key).
 ///
-/// API key dibaca dari `--dart-define=RAPIDAPI_KEY=...` (di-inject GitHub
-/// Actions dari GitHub Secret saat build). Kalau key belum ada / request
-/// gagal, widget jatuh ke fallback aman + tombol "Buka di Google Maps"
-/// supaya UX tetep jalan.
+/// Sumber tile: `https://staticmap.openstreetmap.de/staticmap.php` — gratis,
+/// publik, gak butuh key. Kalau request gagal (offline / 5xx), widget jatuh
+/// ke fallback aman + tombol "Buka di Google Maps".
 ///
 /// API publik widget (`MapEmbed.coords` / `MapEmbed.query`) DIPERTAHANKAN
 /// sama persis biar pemanggil (salon screen / detail) gak perlu diubah.
 class MapEmbed extends StatefulWidget {
-  final String? coordsLocation; // "lat,lng" untuk RapidAPI
-  final String? queryLocation;  // teks bebas
   final double? lat;
   final double? lng;
   final String? query;
+  final int zoom;
   final double height;
   final BorderRadius borderRadius;
 
   const MapEmbed._({
-    this.coordsLocation,
-    this.queryLocation,
     this.lat,
     this.lng,
     this.query,
+    required this.zoom,
     required this.height,
     required this.borderRadius,
   });
@@ -39,14 +32,14 @@ class MapEmbed extends StatefulWidget {
     Key? key,
     required double lat,
     required double lng,
-    int zoom = 15, // dipertahankan utk kompat — tidak dipakai RapidAPI.
+    int zoom = 15,
     double height = 200,
     BorderRadius? borderRadius,
   }) {
     return MapEmbed._(
-      coordsLocation: '$lat,$lng',
       lat: lat,
       lng: lng,
+      zoom: zoom,
       height: height,
       borderRadius: borderRadius ?? BorderRadius.circular(20),
     );
@@ -55,13 +48,13 @@ class MapEmbed extends StatefulWidget {
   factory MapEmbed.query({
     Key? key,
     required String query,
-    int zoom = 14, // kompat — tidak dipakai RapidAPI.
+    int zoom = 14,
     double height = 200,
     BorderRadius? borderRadius,
   }) {
     return MapEmbed._(
-      queryLocation: query,
       query: query,
+      zoom: zoom,
       height: height,
       borderRadius: borderRadius ?? BorderRadius.circular(20),
     );
@@ -72,55 +65,33 @@ class MapEmbed extends StatefulWidget {
 }
 
 class _MapEmbedState extends State<MapEmbed> {
-  Uint8List? _bytes;
-  bool _loading = true;
+  // Fallback default Jakarta (Monas) untuk mode "query" — OSM staticmap butuh
+  // koordinat, jadi query teks tidak bisa langsung dipakai. Lebih aman center
+  // ke Jakarta supaya tetap jalan offline-friendly.
+  static const double _fallbackLat = -6.1751;
+  static const double _fallbackLng = 106.8650;
+
+  late final String _imageUrl = _buildUrl();
   bool _failed = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      // Pixel size mengikuti tinggi widget supaya proporsional di layar.
-      final h = widget.height.round().clamp(200, 640);
-      final w = (h * 1.6).round().clamp(320, 960);
-
-      Uint8List? bytes;
-      if (widget.coordsLocation != null) {
-        bytes = await RapidMapsService.instance.fetchStreetViewByCoords(
-          lat: widget.lat ?? 0,
-          lng: widget.lng ?? 0,
-          width: w,
-          height: h,
-        );
-      } else {
-        bytes = await RapidMapsService.instance.fetchStreetViewByQuery(
-          query: widget.query ?? '',
-          width: w,
-          height: h,
-        );
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _bytes = bytes;
-        _failed = bytes == null;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _failed = true;
-        _loading = false;
-      });
-    }
+  String _buildUrl() {
+    final h = widget.height.round().clamp(180, 640);
+    final w = (h * 1.8).round().clamp(320, 900);
+    final lat = widget.lat ?? _fallbackLat;
+    final lng = widget.lng ?? _fallbackLng;
+    final marker = '$lat,$lng,red-pushpin';
+    return 'https://staticmap.openstreetmap.de/staticmap.php'
+        '?center=$lat,$lng'
+        '&zoom=${widget.zoom}'
+        '&size=${w}x$h'
+        '&maptype=mapnik'
+        '&markers=$marker';
   }
 
   Future<void> _openExternal() async {
-    final q = widget.coordsLocation ?? widget.query ?? '';
+    final q = widget.lat != null && widget.lng != null
+        ? '${widget.lat},${widget.lng}'
+        : (widget.query ?? '');
     if (q.isEmpty) return;
     final uri = Uri.parse(
         'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(q)}');
@@ -139,21 +110,32 @@ class _MapEmbedState extends State<MapEmbed> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_bytes != null && !_failed)
-              Image.memory(_bytes!, fit: BoxFit.cover, gaplessPlayback: true)
+            if (!_failed)
+              Image.network(
+                _imageUrl,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    color: AppColors.primarySoft.withValues(alpha: .25),
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(
+                      color: AppColors.primary,
+                      strokeWidth: 2,
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _failed = true);
+                  });
+                  return _MapFallback(onOpen: _openExternal);
+                },
+              )
             else
               _MapFallback(onOpen: _openExternal),
-            if (_loading)
-              const ColoredBox(
-                color: Color(0x11FF8FB1),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.primary,
-                    strokeWidth: 2,
-                  ),
-                ),
-              ),
-            if (_bytes != null && !_failed)
+            if (!_failed)
               Positioned(
                 right: 8,
                 bottom: 8,
@@ -202,8 +184,7 @@ class _MapFallback extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.map_outlined,
-              color: AppColors.primary, size: 36),
+          const Icon(Icons.map_outlined, color: AppColors.primary, size: 36),
           const SizedBox(height: 6),
           const Text('Preview map belum tersedia',
               style: TextStyle(color: AppColors.textSecondary)),

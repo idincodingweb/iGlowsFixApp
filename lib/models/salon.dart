@@ -8,6 +8,9 @@ class Salon {
   final String priceTier; // $, $$, $$$
   final String emoji;
 
+  /// Alamat lengkap untuk ditampilkan di detail salon.
+  final String address;
+
   /// Koordinat opsional untuk embed Google Maps.
   /// Default 0,0 = fallback aman; kalau 0,0, UI fallback pakai pencarian
   /// berdasarkan [name] + [area] (`?q=nama+area`).
@@ -23,6 +26,7 @@ class Salon {
     required this.services,
     required this.priceTier,
     required this.emoji,
+    this.address = '',
     this.lat = 0,
     this.lng = 0,
   });

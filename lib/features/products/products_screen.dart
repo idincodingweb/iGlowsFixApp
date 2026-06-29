@@ -91,15 +91,38 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Container(
+                            width: double.infinity,
                             color: AppColors.primarySoft.withValues(alpha: .35),
-                            borderRadius: BorderRadius.circular(16),
+                            alignment: Alignment.center,
+                            child: p.imageUrl.isNotEmpty
+                                ? Image.network(
+                                    p.imageUrl,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    loadingBuilder: (_, child, prog) {
+                                      if (prog == null) return child;
+                                      return const Center(
+                                        child: SizedBox(
+                                          width: 24, height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: AppColors.primary,
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (_, __, ___) => Text(
+                                      p.emoji,
+                                      style: const TextStyle(fontSize: 52),
+                                    ),
+                                  )
+                                : Text(p.emoji,
+                                    style: const TextStyle(fontSize: 52)),
                           ),
-                          alignment: Alignment.center,
-                          child: Text(p.emoji,
-                              style: const TextStyle(fontSize: 52)),
                         ),
                       ),
                       const SizedBox(height: 8),
