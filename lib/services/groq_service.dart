@@ -102,7 +102,7 @@ class GroqService {
         : 'Konteks user: skinType=${profile.skinType}, age=${profile.age}, '
             'concerns=${profile.concerns.join(",")}, goal=${profile.goal}. ';
 
-    final sys =
+    const sys =
         'Kamu adalah AI Skin Analyzer profesional. Analisa foto wajah dan '
         'balas HANYA JSON valid (tanpa markdown, tanpa code fence) dengan '
         'schema: {"skinType": "Normal|Kering|Berminyak|Kombinasi|Sensitif", '
