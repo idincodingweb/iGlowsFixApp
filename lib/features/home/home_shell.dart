@@ -30,7 +30,7 @@ class _HomeShellState extends State<HomeShell> {
     _NavItem(icon: Icons.checklist_rounded, activeIcon: Icons.fact_check_rounded, label: 'Routine'),
     _NavItem(icon: Icons.center_focus_strong_outlined, activeIcon: Icons.center_focus_strong, label: 'Analyze'),
     _NavItem(icon: Icons.shopping_bag_outlined, activeIcon: Icons.shopping_bag_rounded, label: 'Products'),
-    _NavItem(icon: Icons.spa_outlined, activeIcon: Icons.spa_rounded, label: 'Salon'),
+    _NavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book_rounded, label: 'Articles'),
   ];
 
   void _onTap(int i) {

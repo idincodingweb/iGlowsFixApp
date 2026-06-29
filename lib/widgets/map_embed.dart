@@ -1,16 +1,20 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_theme.dart';
 
-/// Widget peta yang nge-render static map dari OpenStreetMap (tanpa API key).
+/// Widget peta yang nge-render preview map dari OpenStreetMap tiles langsung
+/// (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`) — gratis, publik, tanpa
+/// API key. Tiap tile di-load via [Image.network] (cache otomatis), disusun
+/// grid yang ditengahin ke koordinat target, plus pin merah di tengah.
 ///
-/// Sumber tile: `https://staticmap.openstreetmap.de/staticmap.php` — gratis,
-/// publik, gak butuh key. Kalau request gagal (offline / 5xx), widget jatuh
-/// ke fallback aman + tombol "Buka di Google Maps".
+/// Kalau semua tile gagal load (offline), widget jatuh ke fallback aman
+/// dengan tombol "Buka di Google Maps".
 ///
-/// API publik widget (`MapEmbed.coords` / `MapEmbed.query`) DIPERTAHANKAN
-/// sama persis biar pemanggil (salon screen / detail) gak perlu diubah.
+/// API publik (`MapEmbed.coords` / `MapEmbed.query`) DIPERTAHANKAN sama
+/// persis biar pemanggil gak perlu diubah.
 class MapEmbed extends StatefulWidget {
   final double? lat;
   final double? lng;
@@ -65,27 +69,29 @@ class MapEmbed extends StatefulWidget {
 }
 
 class _MapEmbedState extends State<MapEmbed> {
-  // Fallback default Jakarta (Monas) untuk mode "query" — OSM staticmap butuh
-  // koordinat, jadi query teks tidak bisa langsung dipakai. Lebih aman center
-  // ke Jakarta supaya tetap jalan offline-friendly.
+  // Fallback default Jakarta (Monas) untuk mode "query".
   static const double _fallbackLat = -6.1751;
   static const double _fallbackLng = 106.8650;
+  static const double _tileSize = 256.0;
 
-  late final String _imageUrl = _buildUrl();
-  bool _failed = false;
+  int _tileErrors = 0;
+  int _tileTotal = 0;
+  bool get _allFailed => _tileTotal > 0 && _tileErrors >= _tileTotal;
 
-  String _buildUrl() {
-    final h = widget.height.round().clamp(180, 640);
-    final w = (h * 1.8).round().clamp(320, 900);
-    final lat = widget.lat ?? _fallbackLat;
-    final lng = widget.lng ?? _fallbackLng;
-    final marker = '$lat,$lng,red-pushpin';
-    return 'https://staticmap.openstreetmap.de/staticmap.php'
-        '?center=$lat,$lng'
-        '&zoom=${widget.zoom}'
-        '&size=${w}x$h'
-        '&maptype=mapnik'
-        '&markers=$marker';
+  double get _lat => widget.lat ?? _fallbackLat;
+  double get _lng => widget.lng ?? _fallbackLng;
+  int get _z => widget.zoom.clamp(2, 19);
+
+  /// Web Mercator: konversi (lat,lng) → fractional tile (x,y) di zoom z.
+  ({double x, double y}) _latLngToTile(double lat, double lng, int z) {
+    final n = math.pow(2, z).toDouble();
+    final x = (lng + 180.0) / 360.0 * n;
+    final latRad = lat * math.pi / 180.0;
+    final y = (1.0 -
+            math.log(math.tan(latRad) + 1.0 / math.cos(latRad)) / math.pi) /
+        2.0 *
+        n;
+    return (x: x, y: y);
   }
 
   Future<void> _openExternal() async {
@@ -107,68 +113,139 @@ class _MapEmbedState extends State<MapEmbed> {
       child: SizedBox(
         height: widget.height,
         width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (!_failed)
-              Image.network(
-                _imageUrl,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: AppColors.primarySoft.withValues(alpha: .25),
-                    alignment: Alignment.center,
-                    child: const CircularProgressIndicator(
-                      color: AppColors.primary,
-                      strokeWidth: 2,
-                    ),
-                  );
-                },
-                errorBuilder: (_, __, ___) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) setState(() => _failed = true);
-                  });
-                  return _MapFallback(onOpen: _openExternal);
-                },
-              )
-            else
-              _MapFallback(onOpen: _openExternal),
-            if (!_failed)
-              Positioned(
-                right: 8,
-                bottom: 8,
-                child: Material(
-                  color: Colors.white.withValues(alpha: .9),
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: _openExternal,
-                    child: const Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.open_in_new,
-                              size: 14, color: AppColors.primary),
-                          SizedBox(width: 4),
-                          Text('Maps',
-                              style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12)),
-                        ],
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth.isFinite ? c.maxWidth : 360.0;
+            final h = widget.height;
+            return _allFailed
+                ? _MapFallback(onOpen: _openExternal)
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(color: const Color(0xFFE8E0D8)),
+                      _buildTileGrid(w, h),
+                      // Pin tengah
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: 18),
+                          child: Icon(Icons.location_on,
+                              color: AppColors.primary,
+                              size: 36,
+                              shadows: [
+                                Shadow(
+                                    color: Colors.black38,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2))
+                              ]),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+                      // Attribution OSM (wajib)
+                      Positioned(
+                        left: 6,
+                        bottom: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          color: Colors.white.withValues(alpha: .75),
+                          child: const Text('© OpenStreetMap',
+                              style: TextStyle(
+                                  fontSize: 9, color: Colors.black87)),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Material(
+                          color: Colors.white.withValues(alpha: .92),
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _openExternal,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.open_in_new,
+                                      size: 14, color: AppColors.primary),
+                                  SizedBox(width: 4),
+                                  Text('Maps',
+                                      style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+          },
         ),
       ),
     );
+  }
+
+  Widget _buildTileGrid(double width, double height) {
+    final z = _z;
+    final center = _latLngToTile(_lat, _lng, z);
+    final centerPxX = center.x * _tileSize;
+    final centerPxY = center.y * _tileSize;
+
+    // Berapa tile di kiri/kanan/atas/bawah biar nutup canvas + 1 tile buffer.
+    final cols = (width / _tileSize).ceil() + 2;
+    final rows = (height / _tileSize).ceil() + 2;
+    final startTileX = center.x.floor() - (cols ~/ 2);
+    final startTileY = center.y.floor() - (rows ~/ 2);
+
+    // Offset piksel: gambar tile (startTileX,startTileY) di posisi top-left
+    // sedemikian rupa sehingga (centerPxX,centerPxY) jatuh di tengah canvas.
+    final originPxX = width / 2 - (centerPxX - startTileX * _tileSize);
+    final originPxY = height / 2 - (centerPxY - startTileY * _tileSize);
+
+    final maxTile = math.pow(2, z).toInt();
+    final tiles = <Widget>[];
+    var total = 0;
+    for (var i = 0; i < cols; i++) {
+      for (var j = 0; j < rows; j++) {
+        final tx = startTileX + i;
+        final ty = startTileY + j;
+        if (ty < 0 || ty >= maxTile) continue;
+        final wrappedTx = ((tx % maxTile) + maxTile) % maxTile;
+        total++;
+        // Sub-domain rotation buat ngehindarin throttling per-host.
+        final sub = ['a', 'b', 'c'][(tx + ty).abs() % 3];
+        final url =
+            'https://$sub.tile.openstreetmap.org/$z/$wrappedTx/$ty.png';
+        tiles.add(Positioned(
+          left: originPxX + i * _tileSize,
+          top: originPxY + j * _tileSize,
+          width: _tileSize,
+          height: _tileSize,
+          child: Image.network(
+            url,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() => _tileErrors++);
+              });
+              return const SizedBox.shrink();
+            },
+          ),
+        ));
+      }
+    }
+    if (_tileTotal != total) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _tileTotal = total);
+      });
+    }
+    return Stack(children: tiles);
   }
 }
 

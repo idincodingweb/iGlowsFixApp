@@ -855,3 +855,51 @@ Secret, di-inject saat build).
 - Untuk menambah anti-tamper lebih jauh (signature check, root
   detection, SSL pinning), bisa ditambah di bagian berikutnya — di luar
   scope sesi ini.
+
+---
+
+## M12 — Refactor Tab "Salon" → "Articles" (Beauty & Wellness Hub)
+
+Tanggal: 29 Juni 2026
+
+### Latar Belakang
+Map preview di tab Salon kurang reliable (tile OSM sering throttle / blank) dan
+data salon dummy tidak memberi value berkelanjutan untuk user harian.
+Diputuskan untuk **mengganti tab tersebut menjadi pusat artikel** kesehatan,
+kecantikan, diet, dan lifestyle — konten yang bisa user konsumsi tiap hari.
+
+### Perubahan
+1. **Bottom Navigation**
+   - Item ke-5 `Salon` (`Icons.spa_*`) → **`Articles`** (`Icons.menu_book_*`).
+   - File: `lib/features/home/home_shell.dart`.
+2. **Tab Wrapper** (`lib/features/home/tabs/salon_tab.dart`)
+   - Tidak lagi memuat `SalonScreen`; sekarang me-render `ArticlesScreen`.
+   - Nama class `SalonTab` dipertahankan demi menjaga import lain tetap stabil.
+3. **Model baru** `lib/models/article.dart`
+   - `Article { id, title, category, excerpt, imageUrl, author, readMinutes,
+     publishedAt, sections, tags }`.
+   - `ArticleSection { heading, body }` untuk body artikel multi-section.
+4. **Data sample** `lib/services/sample_articles.dart`
+   - 12 artikel realistis berbahasa Indonesia dengan gambar Unsplash.
+   - Kategori: `All, Wajah, Skincare, Make Up, Tubuh, Diet, Rambut,
+     Lifestyle, Mental`.
+5. **Screen baru** `lib/features/articles/articles_screen.dart`
+   - AppBar branding iGlows yang konsisten.
+   - **Kategori pill chips scrollable horizontal** di bawah header.
+   - Filter list artikel by kategori (default `All`).
+   - Kartu artikel: thumbnail (Image.network + loader & fallback), badge
+     kategori, judul (2 baris), excerpt (2 baris), durasi baca, penulis.
+6. **Screen detail** `lib/features/articles/article_detail_screen.dart`
+   - SliverAppBar dengan cover image + gradient overlay.
+   - Header: badge kategori, tanggal, judul, info penulis + tombol bookmark
+     (snackbar “Disimpan ke favorit ✨”).
+   - Excerpt highlight card bergradient pink lembut.
+   - Body artikel multi-section (heading pink + paragraf).
+   - Wrap tag `#hashtag` di bagian bawah.
+
+### Catatan
+- Salon screen lama (`lib/features/salon/`) **tidak dihapus** — masih bisa
+  digunakan kembali bila suatu saat dibutuhkan (misal untuk fitur booking
+  klinik). Saat ini sekadar tidak di-route dari bottom nav.
+- Tidak ada dependency baru — semua dibangun memakai widget existing
+  (`GlowCard`, `PillChip`) dan `Image.network`.
