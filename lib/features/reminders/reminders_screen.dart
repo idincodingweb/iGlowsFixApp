@@ -109,7 +109,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     children: [
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
                         title: const Text('Rutinitas pagi'),
                         subtitle:
                             Text('Setiap hari • ${_fmt(_s.morningHour, _s.morningMinute)}'),
@@ -138,7 +138,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     children: [
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
                         title: const Text('Rutinitas malam'),
                         subtitle:
                             Text('Setiap hari • ${_fmt(_s.nightHour, _s.nightMinute)}'),
@@ -165,7 +165,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 GlowCard(
                   child: SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                     title: const Text('Cek skin score mingguan'),
                     subtitle: const Text('Minggu • 19:00'),
                     value: _s.weeklyEnabled,
@@ -181,7 +181,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       : () async {
                           await _svc.requestPermission();
                           await _svc.fireTest();
-                          if (!mounted) return;
+                          if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                                 content: Text('Test reminder dikirim ✨')),

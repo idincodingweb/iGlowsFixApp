@@ -140,9 +140,9 @@ class _MapFallback extends StatelessWidget {
     return Container(
       color: AppColors.cream,
       alignment: Alignment.center,
-      child: Column(
+      child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           Icon(Icons.map_outlined, color: AppColors.primary, size: 36),
           SizedBox(height: 6),
           Text('Map gak bisa dimuat',
