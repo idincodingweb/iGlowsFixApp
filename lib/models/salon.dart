@@ -8,6 +8,12 @@ class Salon {
   final String priceTier; // $, $$, $$$
   final String emoji;
 
+  /// Koordinat opsional untuk embed Google Maps.
+  /// Default 0,0 = fallback aman; kalau 0,0, UI fallback pakai pencarian
+  /// berdasarkan [name] + [area] (`?q=nama+area`).
+  final double lat;
+  final double lng;
+
   const Salon({
     required this.id,
     required this.name,
@@ -17,5 +23,9 @@ class Salon {
     required this.services,
     required this.priceTier,
     required this.emoji,
+    this.lat = 0,
+    this.lng = 0,
   });
+
+  bool get hasCoords => lat != 0 || lng != 0;
 }

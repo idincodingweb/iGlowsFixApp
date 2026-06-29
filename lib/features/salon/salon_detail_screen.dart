@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../models/salon.dart';
 import '../../widgets/glow_widgets.dart';
+import '../../widgets/map_embed.dart';
 
 class SalonDetailScreen extends StatelessWidget {
   final Salon salon;
   const SalonDetailScreen({super.key, required this.salon});
+
+  Future<void> _openInMaps() async {
+    final uri = salon.hasCoords
+        ? Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${salon.lat},${salon.lng}')
+        : Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent('${salon.name} ${salon.area}')}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('openInMaps error: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +32,7 @@ class SalonDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         children: [
           Container(
-            height: 200,
+            height: 160,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               gradient: LinearGradient(colors: [
@@ -35,15 +51,34 @@ class SalonDetailScreen extends StatelessWidget {
               const Icon(Icons.location_on,
                   color: AppColors.primary, size: 18),
               const SizedBox(width: 4),
-              Text('${salon.area} • ${salon.distanceKm} km',
-                  style: tt.bodySmall),
-              const Spacer(),
+              Expanded(
+                child: Text('${salon.area} • ${salon.distanceKm} km',
+                    style: tt.bodySmall),
+              ),
               const Icon(Icons.star_rounded,
                   color: Colors.amber, size: 18),
               Text(' ${salon.rating}', style: tt.bodyMedium),
             ],
           ),
           const SizedBox(height: 16),
+          // Embed Google Maps (tanpa API key).
+          salon.hasCoords
+              ? MapEmbed.coords(
+                  lat: salon.lat, lng: salon.lng, zoom: 16, height: 200)
+              : MapEmbed.query(
+                  query: '${salon.name} ${salon.area}',
+                  zoom: 15,
+                  height: 200),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _openInMaps,
+              icon: const Icon(Icons.directions_outlined),
+              label: const Text('Petunjuk arah'),
+            ),
+          ),
+          const SizedBox(height: 8),
           Text('Services',
               style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),

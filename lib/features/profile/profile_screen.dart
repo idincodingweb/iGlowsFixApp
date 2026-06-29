@@ -162,6 +162,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SectionHeader(title: 'Pengaturan'),
+          _menu(Icons.alarm, 'Reminder Skincare',
+              onTap: () => Navigator.pushNamed(context, '/reminders')),
           _menu(Icons.notifications_none, 'Notifikasi'),
           _menu(Icons.lock_outline, 'Privasi & Keamanan'),
           _menu(Icons.help_outline, 'Bantuan'),
@@ -191,15 +193,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _menu(IconData icon, String label) {
+  Widget _menu(IconData icon, String label, {VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: GlowCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$label akan tersedia segera.')));
-        },
+        onTap: onTap ??
+            () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$label akan tersedia segera.')));
+            },
         child: Row(
           children: [
             Icon(icon, color: AppColors.primary),

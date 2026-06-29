@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/salon.dart';
 import '../../services/sample_data.dart';
 import '../../widgets/glow_widgets.dart';
+import '../../widgets/map_embed.dart';
 import 'salon_detail_screen.dart';
 
 class SalonScreen extends StatefulWidget {
@@ -71,74 +73,15 @@ class _SalonScreenState extends State<SalonScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Map placeholder
-          GlowCard(
-            padding: EdgeInsets.zero,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primarySoft.withValues(alpha: .4),
-                      AppColors.cream,
-                    ],
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CustomPaint(painter: _MapGridPainter()),
-                    ),
-                    const Positioned(
-                      left: 60, top: 50,
-                      child: Icon(Icons.location_on,
-                          color: AppColors.primary, size: 30),
-                    ),
-                    const Positioned(
-                      right: 70, top: 40,
-                      child: Icon(Icons.location_on,
-                          color: AppColors.primary, size: 30),
-                    ),
-                    const Positioned(
-                      left: 40, bottom: 50,
-                      child: Icon(Icons.location_on,
-                          color: AppColors.primary, size: 26),
-                    ),
-                    const Positioned(
-                      right: 50, bottom: 60,
-                      child: Icon(Icons.location_on,
-                          color: AppColors.primary, size: 26),
-                    ),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: .15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.location_pin,
-                            color: AppColors.primary, size: 44),
-                      ),
-                    ),
-                    Positioned(
-                      right: 12, bottom: 12,
-                      child: Container(
-                        width: 40, height: 40,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.my_location,
-                            color: AppColors.primary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          // Map embed Google Maps (tanpa API key) — fokus salon terdekat.
+          _SalonsMapEmbed(salons: list),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _openMaps(list),
+              icon: const Icon(Icons.open_in_new, size: 18),
+              label: const Text('Buka di Google Maps'),
             ),
           ),
           const SectionHeader(title: 'Nearby Salons ✨', action: 'See all'),
@@ -236,22 +179,40 @@ class _SalonScreenState extends State<SalonScreen> {
       SnackBar(content: Text('Booking ke ${s.name} sedang diproses ✨')),
     );
   }
-}
 
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = AppColors.primary.withValues(alpha: .12)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 28) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
-    }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+  Future<void> _openMaps(List<Salon> list) async {
+    final first = list.firstWhere(
+      (s) => s.hasCoords,
+      orElse: () => list.isNotEmpty ? list.first : sampleSalons.first,
+    );
+    final uri = first.hasCoords
+        ? Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${first.lat},${first.lng}')
+        : Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent('${first.name} ${first.area}')}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('openMaps error: $e');
     }
   }
+}
+
+/// Map embed kecil — center ke salon pertama yg punya koordinat.
+class _SalonsMapEmbed extends StatelessWidget {
+  final List<Salon> salons;
+  const _SalonsMapEmbed({required this.salons});
 
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  Widget build(BuildContext context) {
+    final s = salons.firstWhere(
+      (x) => x.hasCoords,
+      orElse: () => salons.isNotEmpty ? salons.first : sampleSalons.first,
+    );
+    if (s.hasCoords) {
+      return MapEmbed.coords(lat: s.lat, lng: s.lng, zoom: 13, height: 200);
+    }
+    return MapEmbed.query(
+        query: '${s.name} ${s.area}', zoom: 13, height: 200);
+  }
 }

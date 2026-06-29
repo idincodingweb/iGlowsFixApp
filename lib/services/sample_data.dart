@@ -25,15 +25,21 @@ const sampleProducts = <Product>[
     rating: 4.6, goodFor: ['Kering','Normal'], emoji: '🌙'),
 ];
 
+// Koordinat dummy area Jakarta — owner bisa ganti sesuai data real.
 const sampleSalons = <Salon>[
-  Salon(id: 's1', name: 'Glow Beauty Lounge', area: 'Beauty Street', distanceKm: 1.2,
-    rating: 4.8, services: ['Facial','Skin','Makeup'], priceTier: '\$\$', emoji: '💆‍♀️'),
-  Salon(id: 's2', name: 'Pink Petal Spa', area: 'Rose Avenue', distanceKm: 2.1,
-    rating: 4.7, services: ['Massage','Spa','Facial'], priceTier: '\$\$', emoji: '🌸'),
-  Salon(id: 's3', name: 'Glow City Center', area: 'Blossom Rd', distanceKm: 2.6,
-    rating: 4.6, services: ['Hair','Nails','Facial'], priceTier: '\$\$\$', emoji: '💅'),
-  Salon(id: 's4', name: 'Bloom Skin Clinic', area: 'Green Park', distanceKm: 3.4,
-    rating: 4.9, services: ['Facial','Laser','Peel'], priceTier: '\$\$\$', emoji: '🌷'),
-  Salon(id: 's5', name: 'Soft Touch Studio', area: 'Beauty Street', distanceKm: 0.8,
-    rating: 4.5, services: ['Nails','Lash'], priceTier: '\$', emoji: '💖'),
+  Salon(id: 's1', name: 'Glow Beauty Lounge', area: 'Senopati, Jakarta', distanceKm: 1.2,
+    rating: 4.8, services: ['Facial','Skin','Makeup'], priceTier: '\$\$', emoji: '💆‍♀️',
+    lat: -6.2297, lng: 106.8104),
+  Salon(id: 's2', name: 'Pink Petal Spa', area: 'Kemang, Jakarta', distanceKm: 2.1,
+    rating: 4.7, services: ['Massage','Spa','Facial'], priceTier: '\$\$', emoji: '🌸',
+    lat: -6.2614, lng: 106.8136),
+  Salon(id: 's3', name: 'Glow City Center', area: 'Sudirman, Jakarta', distanceKm: 2.6,
+    rating: 4.6, services: ['Hair','Nails','Facial'], priceTier: '\$\$\$', emoji: '💅',
+    lat: -6.2244, lng: 106.8200),
+  Salon(id: 's4', name: 'Bloom Skin Clinic', area: 'Menteng, Jakarta', distanceKm: 3.4,
+    rating: 4.9, services: ['Facial','Laser','Peel'], priceTier: '\$\$\$', emoji: '🌷',
+    lat: -6.1957, lng: 106.8323),
+  Salon(id: 's5', name: 'Soft Touch Studio', area: 'Senopati, Jakarta', distanceKm: 0.8,
+    rating: 4.5, services: ['Nails','Lash'], priceTier: '\$', emoji: '💖',
+    lat: -6.2305, lng: 106.8090),
 ];

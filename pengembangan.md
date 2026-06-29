@@ -600,3 +600,111 @@ tampilkan progress chart, dan sediakan Before/After comparator.
 - Firestore Security Rules Milestone 3.5 sudah meng-cover path
   `users/{uid}/consultations/**` dan `users/{uid}/skin_analyses/**`
   (rule wildcard `users/{uid}/{document=**}`).
+
+---
+
+## Milestone 8 — Reminder Push Notification (Lokal)
+
+### Tujuan
+Reminder rutin skincare tanpa biaya server / FCM / cloud (sesuai request
+owner: hindari layanan berbayar). Murni notifikasi lokal yang dijadwalkan
+di device user.
+
+### Fitur
+- Reminder **Pagi** (default 07:00) — pengingat morning routine.
+- Reminder **Malam** (default 21:00) — pengingat night routine.
+- Reminder **Skin Check Mingguan** (default Minggu 19:00) — ajakan scan
+  ulang via Skin Analyzer.
+- Toggle on/off per jenis reminder.
+- Time picker per reminder (jam pagi & malam dapat diubah).
+- Persist setting via `SharedPreferences` (`ReminderSettings`).
+- Auto re-schedule setiap app start (`main.dart`) supaya tetap aktif walau
+  user reinstall / clear data ringan.
+
+### File baru
+- `lib/services/reminder_service.dart` — singleton wrapper
+  `flutter_local_notifications` + `timezone` (Asia/Jakarta). Method:
+  `init()`, `loadSettings()`, `saveSettings()`, `applySchedules()`,
+  `requestPermissions()`, `testNotify()`.
+- `lib/features/reminders/reminders_screen.dart` — UI pengaturan reminder
+  (switch + time picker + tombol test).
+
+### File diubah
+- `lib/main.dart` — init `ReminderService` + `applySchedules` di startup
+  (try/catch fail-safe, gak nge-block UI). Tambah route `/reminders`.
+- `lib/features/profile/profile_screen.dart` — entry menu
+  **Reminder Skincare** → `Navigator.pushNamed('/reminders')`.
+
+### Dependency
+- `flutter_local_notifications: ^17.2.3`
+- `timezone: ^0.9.4`
+
+### AndroidManifest.xml — yang ditambahkan
+Permission baru:
+- `POST_NOTIFICATIONS` (Android 13+)
+- `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM` (jadwal jam tepat)
+- `RECEIVE_BOOT_COMPLETED` (reschedule setelah reboot)
+- `WAKE_LOCK`, `VIBRATE`
+
+Receiver:
+- `com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver`
+- `com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver`
+  (dengan intent-filter `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`,
+  `QUICKBOOT_POWERON`).
+
+### Catatan
+- **Gratis 100%** — gak butuh Firebase Cloud Messaging / server.
+- Reminder jalan bahkan saat app ditutup (selama OS gak kill alarm).
+- Untuk iOS, plugin minta izin saat runtime (`requestPermissions`).
+
+---
+
+## Milestone 9 — Salon Terdekat (Maps Embed, Tanpa API Key)
+
+### Tujuan
+Tampilkan lokasi salon di peta interaktif **tanpa Google Maps SDK /
+Places API** (yang butuh billing / kartu kredit). Pakai Google Maps
+**embed URL publik** lewat `WebView` — gratis & no API key.
+
+### Fitur
+- Map embed Google Maps di **Salon detail screen** — koordinat lat/lng
+  per salon, zoom 16.
+- Fallback ke **map by query** (search nama + area) kalau salon belum
+  punya koordinat (`hasCoords == false`).
+- Tombol **"Petunjuk arah"** → buka Google Maps eksternal (app native
+  kalau ada, fallback browser) via `url_launcher`.
+- List salon screen: tetap card layout (placeholder grid map dihapus,
+  digantikan map embed di detail).
+
+### File baru
+- `lib/widgets/map_embed.dart` — widget `MapEmbed` pakai `webview_flutter`.
+  Factory: `MapEmbed.coords(lat, lng, zoom)` & `MapEmbed.query(query, zoom)`.
+  URL: `https://maps.google.com/maps?q=...&z=...&output=embed` (publik,
+  tanpa key). Fallback UI kalau WebView gagal load.
+
+### File diubah
+- `lib/models/salon.dart` — tambah field `lat`, `lng` (default `0.0`,
+  backward compatible) + getter `hasCoords`.
+- `lib/services/sample_data.dart` — sampleSalons dapet koordinat dummy
+  area Jakarta.
+- `lib/features/salon/salon_screen.dart` — hapus `_MapGridPainter`
+  placeholder.
+- `lib/features/salon/salon_detail_screen.dart` — render `MapEmbed`
+  (coords / query) + tombol "Petunjuk arah".
+
+### Dependency
+- `webview_flutter: ^4.10.0`
+- `url_launcher: ^6.3.1`
+
+### AndroidManifest.xml — yang ditambahkan
+- `<queries>` block untuk intent `VIEW` scheme `https` & `geo` — wajib
+  Android 11+ supaya `url_launcher` bisa resolve Google Maps app.
+- `INTERNET` (sudah ada) tetap dibutuhkan WebView.
+
+### Catatan
+- **Zero biaya** — gak butuh Google Cloud billing / Maps API key /
+  Places API.
+- WebView embed support pan + zoom seperti Google Maps biasa.
+- Backward-compatible: salon lama tanpa koordinat tetap render (fallback
+  ke query search).
+
