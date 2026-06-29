@@ -33,6 +33,12 @@ class _LoginScreenState extends State<LoginScreen> {
       await _auth.signIn(_email.text, _password.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/home');
+    } on AuthFlowException catch (e) {
+      if (e.code == 'email-not-verified') {
+        _showVerifyDialog();
+      } else {
+        _showError(e.message);
+      }
     } on FirebaseAuthException catch (e) {
       _showError(e.message ?? 'Login gagal');
     } catch (_) {
@@ -40,6 +46,26 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _showVerifyDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Email belum diverifikasi'),
+        content: Text(
+          'Akun ${_email.text.trim()} belum diverifikasi.\n\n'
+          'Kami sudah kirim ulang link verifikasi ke Gmail kamu. '
+          'Buka inbox/Spam, klik link tersebut, lalu coba login lagi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String msg) {
@@ -78,8 +104,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.mail_outline_rounded),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
-                    if (!v.contains('@')) return 'Email tidak valid';
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return 'Email wajib diisi';
+                    if (!AuthService.isValidGmail(s)) {
+                      return 'Hanya email @gmail.com yang diterima';
+                    }
                     return null;
                   },
                 ),

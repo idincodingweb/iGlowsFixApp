@@ -38,7 +38,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _password.text,
       );
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/home');
+      // User dipaksa sign-out di service. Arahkan kembali ke login
+      // sambil tampilkan info verifikasi email.
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Verifikasi email kamu'),
+          content: Text(
+            'Kami sudah kirim link verifikasi ke ${_email.text.trim()}.\n\n'
+            'Buka Gmail kamu (cek juga folder Spam), klik link verifikasinya, '
+            'lalu kembali ke aplikasi untuk login.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Mengerti'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } on AuthFlowException catch (e) {
+      _showError(e.message);
     } on FirebaseAuthException catch (e) {
       _showError(e.message ?? 'Registrasi gagal');
     } catch (_) {
@@ -94,8 +116,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.mail_outline_rounded),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email wajib diisi';
-                    if (!v.contains('@')) return 'Email tidak valid';
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return 'Email wajib diisi';
+                    if (!AuthService.isValidGmail(s)) {
+                      return 'Hanya email @gmail.com yang diterima';
+                    }
                     return null;
                   },
                 ),

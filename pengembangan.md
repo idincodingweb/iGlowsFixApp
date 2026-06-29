@@ -708,3 +708,150 @@ Places API** (yang butuh billing / kartu kredit). Pakai Google Maps
 - Backward-compatible: salon lama tanpa koordinat tetap render (fallback
   ke query search).
 
+
+---
+
+## BAGIAN 10 — Maps via RapidAPI Street View (REPLACE Google embed)
+
+### Tujuan
+Ganti embed `maps.google.com/.../output=embed` dengan **RapidAPI
+`google-map-places` Street View** supaya preview lokasi salon konsisten,
+ringan (tanpa WebView), dan API key tetap aman (disimpan sebagai GitHub
+Secret, di-inject saat build).
+
+### Implementasi
+- **`lib/services/rapid_maps_service.dart`** (baru) — singleton client
+  ke endpoint `https://google-map-places.p.rapidapi.com/maps/api/streetview`.
+  Header: `x-rapidapi-key` & `x-rapidapi-host`. Hasil `Uint8List` (PNG/JPG)
+  di-cache in-memory per (`location`,`size`) untuk hemat kuota.
+- **`lib/widgets/map_embed.dart`** (rewrite) — `MapEmbed.coords(lat,lng)`
+  & `MapEmbed.query(q)` tetap kompatibel pemakaian lama. Render
+  `Image.memory` + loading shimmer + tombol fallback "Buka di Google Maps"
+  (lewat `url_launcher`) kalau key belum di-set atau request gagal.
+- Backward-compat: kalau `RAPIDAPI_KEY` kosong saat build, widget tidak
+  crash — hanya tampilkan fallback card.
+
+### Secret & Build
+- GitHub Secret: `RAPIDAPI_KEY`.
+- `.github/workflows/build-apk.yml` — inject via
+  `--dart-define=RAPIDAPI_KEY=$RAPIDAPI_KEY` (pola identik dengan
+  `GROQ_API_KEY_1/2`).
+- Dart: `const String.fromEnvironment('RAPIDAPI_KEY')`.
+
+### Dependency
+- Tetap pakai `http` & `url_launcher` (sudah ada). `webview_flutter`
+  masih dipakai untuk fallback historis tapi map utama sudah switch ke
+  Image.memory.
+
+---
+
+## BAGIAN 11 — Hardening: Email Verifikasi (Gmail-only) + Anti Reverse Engineering
+
+### 11.1 Validasi Register & Login (anti pembuatan akun massal)
+
+**Aturan baru:**
+- Pendaftaran **hanya menerima alamat `@gmail.com`** (regex strict,
+  case-insensitive, local-part 1–64 char). Domain selain `gmail.com`
+  langsung ditolak di sisi client + tervalidasi ulang di service.
+- Setelah `createUserWithEmailAndPassword` berhasil, service otomatis:
+  1. `user.sendEmailVerification()` → kirim link verifikasi ke Gmail.
+  2. `FirebaseAuth.signOut()` → paksa user logout.
+  3. Dokumen `users/{uid}` ditulis dengan `emailVerified: false`.
+- Login: setelah `signInWithEmailAndPassword`, service `user.reload()`
+  dan cek `user.emailVerified`. Kalau **belum verifikasi**:
+  - kirim ulang `sendEmailVerification()`,
+  - paksa `signOut()`,
+  - throw `AuthFlowException(code: 'email-not-verified', ...)`.
+- **AuthGate** juga menolak sesi `!emailVerified` (mengatasi sesi lama
+  sebelum aturan ini diberlakukan) → otomatis `signOut()` + balik ke
+  LoginScreen.
+
+**UI:**
+- `register_screen.dart` — validator email pakai
+  `AuthService.isValidGmail(...)`. Sukses register → dialog informatif
+  "Verifikasi email kamu" + balik ke LoginScreen (TIDAK auto-login).
+- `login_screen.dart` — validator email sama. Kalau dapat
+  `AuthFlowException('email-not-verified')` → tampilkan
+  `AlertDialog` "Email belum diverifikasi" + info link sudah dikirim
+  ulang.
+
+**File diubah:**
+- `lib/features/auth/auth_service.dart` — tambah `AuthFlowException`,
+  `isValidGmail`, alur verifikasi di `signIn`/`signUp`,
+  + `resendVerification(email, password)`.
+- `lib/features/auth/register_screen.dart`
+- `lib/features/auth/login_screen.dart`
+- `lib/features/auth/auth_gate.dart` — guard `!emailVerified`.
+
+> Catatan: aktifkan **Email/Password provider** dan template
+> "Email address verification" di Firebase Console → Authentication →
+> Sign-in method / Templates. Tanpa ini link verifikasi tidak terkirim.
+
+### 11.2 Obfuscation Ketat + Native `.so` (anti reverse engineering)
+
+**Layer Java/Kotlin (R8 full-mode):**
+- `android/app/build.gradle`:
+  - `release { minifyEnabled true; shrinkResources true; proguardFiles(
+    getDefaultProguardFile('proguard-android-optimize.txt'),
+    'proguard-rules.pro') }`
+  - `multiDexEnabled true` + `androidx.multidex:multidex:2.0.1`
+    → output APK punya **beberapa file `classes.dex`** (classes.dex,
+    classes2.dex, dst) sesuai permintaan.
+  - `ndk { debugSymbolLevel 'NONE' }` → strip simbol debug dari `.so`.
+  - `packagingOptions.jniLibs.useLegacyPackaging false` → `.so` tidak
+    di-extract ke `/data/.../lib` saat install (susah didump).
+- `android/app/proguard-rules.pro` (baru) — obfuscation **agresif**:
+  - `-allowaccessmodification`
+  - `-repackageclasses 'o'` (semua kelas dipindah ke package satu huruf)
+  - `-overloadaggressively`
+  - `-mergeinterfacesaggressively`
+  - `-optimizationpasses 5`
+  - `-assumenosideeffects` untuk `android.util.Log.*` & `PrintStream`
+    → semua log dihapus di release (anti info-leak).
+  - `-renamesourcefileattribute SourceFile` → nama file asli disamarkan.
+  - Keep rules aman untuk Flutter engine, Firebase/Firestore (reflection
+    `@PropertyName`), WebView JS interface, `flutter_local_notifications`,
+    `image_picker`/exifinterface, Kotlin metadata, MultiDex.
+
+**Layer Native (`.so`):**
+- `defaultConfig.ndk.abiFilters 'armeabi-v7a','arm64-v8a','x86_64'`
+  → engine + plugin native dikompilasi sebagai file `.so` per-ABI
+  (`libflutter.so`, `libapp.so`, plugin native lain).
+- `splits.abi { enable true; include 'armeabi-v7a','arm64-v8a','x86_64';
+  universalApk true }` → menghasilkan APK per-ABI **dan** APK universal.
+  APK per-ABI lebih kecil dan hanya berisi `.so` untuk arsitektur itu
+  (lebih sulit di-repack).
+
+**Layer Dart (Flutter obfuscation):**
+- `.github/workflows/build-apk.yml` — `flutter build apk --release`
+  ditambah `--obfuscate --split-debug-info=build/debug-info`.
+  - `--obfuscate` → simbol Dart di `libapp.so` disamarkan (nama
+    class/method jadi acak), sangat mempersulit dump string &
+    reverse pakai IDA/Ghidra.
+  - `--split-debug-info=build/debug-info` → menghasilkan mapping
+    simbol terpisah, di-upload sebagai artifact `iglows-debug-symbols`
+    supaya stacktrace produksi tetap bisa di-de-obfuscate lokal
+    (`flutter symbolize`).
+
+**Hasil build:**
+- APK release berisi:
+  - `classes.dex`, `classes2.dex`, ... (multi-DEX, kode Java/Kotlin
+    sudah ter-obfuscate R8).
+  - `lib/<abi>/libflutter.so` + `lib/<abi>/libapp.so` (+ plugin .so)
+    — Dart code ter-obfuscate, simbol debug stripped.
+  - `resources.arsc` shrunk (resource yang tak terpakai dibuang).
+- Artifacts CI:
+  - `iglows-release-apk` → `app-release.apk` universal.
+  - `iglows-debug-symbols` → mapping `--split-debug-info` (rahasia,
+    jangan didistribusikan).
+
+### 11.3 Catatan Operasional
+- Repository GitHub harus punya secret: `GROQ_API_KEY_1`,
+  `GROQ_API_KEY_2`, `RAPIDAPI_KEY`. Tanpa salah satunya build tetap
+  jalan (fallback aman di app), tapi fitur terkait nonaktif.
+- Setelah update aturan email-verified, user lama yang belum verifikasi
+  akan otomatis di-logout pada saat buka aplikasi. Mereka harus
+  verifikasi ulang via flow login (akan auto resend link).
+- Untuk menambah anti-tamper lebih jauh (signature check, root
+  detection, SSL pinning), bisa ditambah di bagian berikutnya — di luar
+  scope sesi ini.

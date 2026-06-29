@@ -49,11 +49,56 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
+
+        // Bangun native libraries (.so) untuk semua ABI 64/32-bit modern.
+        // Flutter & plugin native akan dikompilasi ke file .so per-ABI.
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    // Pisah APK per-ABI agar tiap APK hanya berisi .so untuk arsitektur itu
+    // (lebih kecil + lebih sulit di-repack). APK universal tetap dihasilkan.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            universalApk true
+        }
+    }
+
+    // Pastikan native libraries TIDAK diekstrak ke /data/.../lib saat install
+    // (mempersulit dump .so dari device yang tidak di-root).
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+
+            // === Anti reverse-engineering (Java/Kotlin layer) ===
+            // R8 full-mode: obfuscate + shrink + optimize.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+
+            // Strip simbol debug dari .so agar sulit dianalisis dengan IDA/Ghidra.
+            ndk {
+                debugSymbolLevel 'NONE'
+            }
+        }
+
+        debug {
+            // Debug build tetap mudah dipakai dev.
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
@@ -64,4 +109,5 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+    implementation 'androidx.multidex:multidex:2.0.1'
 }

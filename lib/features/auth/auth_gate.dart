@@ -50,6 +50,13 @@ class AuthGate extends StatelessWidget {
         if (user == null) {
           return const LoginScreen();
         }
+        // Tolak sesi yang belum terverifikasi (mis. sesi lama sebelum aturan
+        // verifikasi email diberlakukan). Paksa sign-out + balik ke login.
+        if (!user.emailVerified) {
+          // Fire-and-forget; tidak boleh blokir build().
+          FirebaseAuth.instance.signOut().catchError((_) {});
+          return const LoginScreen();
+        }
         return const HomeShell();
       },
     );
