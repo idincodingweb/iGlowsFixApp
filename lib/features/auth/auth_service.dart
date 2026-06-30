@@ -31,6 +31,14 @@ class AuthService {
       _gmailRegex.hasMatch(email.trim());
 
   void _ensureFirebaseReady() {
+    // Set bahasa email verifikasi ke Indonesia supaya template default
+    // Firebase muncul dalam Bahasa Indonesia (subject + body). Branding
+    // sender (noreply@<project>.firebaseapp.com -> noreply@iglows.app),
+    // kustom domain, dan custom SMTP HARUS di-setup dari Firebase Console:
+    // Authentication -> Templates -> Email verification -> Edit.
+    try {
+      FirebaseAuth.instance.setLanguageCode('id');
+    } catch (_) {}
     if (Firebase.apps.isNotEmpty) return;
     throw FirebaseException(
       plugin: 'firebase_core',
@@ -105,18 +113,35 @@ class AuthService {
     final cred = await _auth.createUserWithEmailAndPassword(
         email: cleanEmail, password: password);
     final user = cred.user;
-    await user?.updateDisplayName(name);
-    await _db.collection('users').doc(user!.uid).set({
-      'name': name,
-      'email': cleanEmail,
-      'emailVerified': false,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    // Kirim email verifikasi.
+    // Step-step setelah akun dibuat dibungkus try/catch sendiri-sendiri.
+    // Kalau salah satu gagal (mis. Firestore offline / rules tolak),
+    // jangan biarkan ke-lempar ke UI sebagai "Registrasi gagal" — akun
+    // sudah ada di Firebase Auth, dan retry akan kena "email-already-in-use".
     try {
-      await user.sendEmailVerification();
-    } catch (_) {}
-    // Paksa sign-out: user harus verifikasi dulu baru bisa login.
+      await user?.updateDisplayName(name);
+    } catch (e) {
+      // ignore: avoid_print
+      print('signUp updateDisplayName error: $e');
+    }
+    try {
+      if (user != null) {
+        await _db.collection('users').doc(user.uid).set({
+          'name': name,
+          'email': cleanEmail,
+          'emailVerified': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      // ignore: avoid_print
+      print('signUp firestore write error: $e');
+    }
+    try {
+      await user?.sendEmailVerification();
+    } catch (e) {
+      // ignore: avoid_print
+      print('signUp sendEmailVerification error: $e');
+    }
     try {
       await _auth.signOut();
     } catch (_) {}

@@ -1116,3 +1116,56 @@ policy Google (no accidental click, tidak overlap konten interaktif).
   QRIS. Saat itu tiba, cukup tambahkan early-return `if (user.isPremium)`
   di tiga method publik `AdsService` (`onAnalyzerCompleted`,
   `onConsultMessageSent`, `NativeAdCard.build`).
+
+---
+
+## M17.1 — Hotfix Register Gagal
+
+**Issue:** Setelah update M17, user lama tetap bisa login, tapi register selalu gagal dengan pesan generik "Registrasi gagal" / "Terjadi kesalahan".
+
+**Root cause analysis:** Di `AuthService.signUp()`, langkah pasca `createUserWithEmailAndPassword` (yaitu `updateDisplayName`, Firestore `users/{uid}.set`, dan `sendEmailVerification`) di-await berurutan tanpa try/catch per langkah. Kalau salah satu gagal (mis. Firestore rules / koneksi), exception ke-lempar ke UI, akun di Firebase Auth sudah terlanjur dibuat → retry berikutnya kena `email-already-in-use` dan tetap muncul pesan generik karena UI tidak menampilkan `code`.
+
+**Fix:**
+- `lib/features/auth/auth_service.dart`: tiap langkah pasca-create dibungkus `try/catch` sendiri-sendiri (log lewat `print`), Firestore write pakai `SetOptions(merge: true)` supaya idempoten. Akun yg sudah dibuat tetap dianggap sukses.
+- `lib/features/auth/register_screen.dart`: error handler menampilkan kode `FirebaseAuthException` spesifik (`email-already-in-use`, `network-request-failed`, `operation-not-allowed`, `weak-password`, `invalid-email`, `too-many-requests`) + fallback `[code] message` supaya gampang didiagnosa di lapangan.
+
+**SOP terpenuhi:** Tidak menyentuh `google-services.json`, `android/app/build.gradle`, atau Gradle wrapper. Model lama Firestore tetap kompatibel (merge write).
+
+---
+
+## M17.2 — Email Verifikasi: Bahasa & Catatan Branding
+
+**Konteks:** User report email verifikasi masuk Spam dan terlihat tidak profesional (subject "Verify your email for iglows-b060f", sender `noreply@iglows-b060f.firebaseapp.com`, body English generik).
+
+**Yang bisa diubah dari kode (sudah dipatch):**
+- `lib/features/auth/auth_service.dart` → `_ensureFirebaseReady()` sekarang memanggil `FirebaseAuth.instance.setLanguageCode('id')` sebelum operasi auth apapun. Efek: template default Firebase Auth (verification & reset password) dikirim dalam **Bahasa Indonesia**.
+
+**Yang TIDAK bisa diubah dari kode Flutter (wajib via Firebase Console):**
+1. **Sender address & nama** (`noreply@iglows-b060f.firebaseapp.com` → `noreply@iglows.app`) — Console → Authentication → Templates → ✏️ → Customize domain (butuh domain + DNS SPF/DKIM).
+2. **Subject & body kustom** — Console → Authentication → Templates → Email verification.
+3. **Action URL kustom** (hilangkan `iglows-b060f.firebaseapp.com` di link) — Console → Templates → Customize action URL + add ke Authorized domains.
+4. **Custom SMTP** (Resend/SendGrid/Mailgun) untuk delivery rate tinggi → butuh Blaze plan.
+
+**Akar masalah spam:** Domain `firebaseapp.com` adalah shared sender yang reputasinya rendah di Gmail. Selama belum pakai custom domain + SPF/DKIM, email akan tetap berisiko masuk Spam — ini limitation Firebase, bukan bug aplikasi.
+
+---
+
+## M17.3 — UX Verifikasi Email (Girl-Friendly)
+
+**Konteks:** Email verifikasi Firebase default sering masuk Spam (lihat M17.2). Target user iGlows (cewek, non-technical) gak otomatis kepikiran cek folder Spam → banyak yang stuck di register.
+
+**Decision:** Verifikasi email TETAP wajib (anti-bot & jaga data quality), TAPI UX-nya dirombak total biar zero-confusion.
+
+**Implementasi:**
+- **`lib/features/auth/verify_email_dialog.dart` (NEW):** Dialog full-screen-style dengan:
+  - Header icon `mark_email_read` + tone friendly ("Yeay, akun kamu udah dibuat! 🥳").
+  - Email user di-highlight pakai chip pink.
+  - **Banner warning kuning besar**: "Cek FOLDER SPAM ya kak!" — dijelaskan email kami kadang nyasar ke Spam.
+  - **4 step bernomor** (Buka Gmail → Cari email iGlows → Cek Inbox & Spam → Klik link → Login).
+  - **Tombol primary "Buka Gmail Sekarang"** — coba launch app Gmail (`googlegmail://`), fallback ke `mail.google.com`.
+  - **Tombol "Kirim Ulang Link"** (opsional via callback `onResend`).
+  - `barrierDismissible: false` supaya user gak nutup tanpa baca.
+- **`register_screen.dart`:** dialog lama `AlertDialog` text-only diganti `VerifyEmailDialog.show(..., isJustRegistered: true)`.
+- **`login_screen.dart`:** error `email-not-verified` sekarang trigger dialog yang sama, plus `onResend` callback yang manggil `AuthService.resendVerification()` (login lalu sendEmailVerification).
+
+**Tidak diubah:** flow auth, security rules, atau requirement verifikasi — hanya layer presentasi.

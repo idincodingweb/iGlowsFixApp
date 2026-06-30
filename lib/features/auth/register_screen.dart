@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/theme/app_theme.dart';
 import 'auth_service.dart';
+import 'verify_email_dialog.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -38,33 +39,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _password.text,
       );
       if (!mounted) return;
-      // User dipaksa sign-out di service. Arahkan kembali ke login
-      // sambil tampilkan info verifikasi email.
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Verifikasi email kamu'),
-          content: Text(
-            'Kami sudah kirim link verifikasi ke ${_email.text.trim()}.\n\n'
-            'Buka Gmail kamu (cek juga folder Spam), klik link verifikasinya, '
-            'lalu kembali ke aplikasi untuk login.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Mengerti'),
-            ),
-          ],
-        ),
+      // Dialog penjelas yang super jelas — highlight folder Spam,
+      // tombol Buka Gmail, step-by-step.
+      await VerifyEmailDialog.show(
+        context,
+        email: _email.text.trim(),
+        isJustRegistered: true,
       );
       if (!mounted) return;
       Navigator.of(context).pop();
     } on AuthFlowException catch (e) {
       _showError(e.message);
     } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? 'Registrasi gagal');
-    } catch (_) {
-      _showError('Terjadi kesalahan, coba lagi.');
+      // Tampilkan code biar gampang didiagnosa kalau ada masalah.
+      final code = e.code;
+      String msg;
+      switch (code) {
+        case 'email-already-in-use':
+          msg = 'Email ini sudah terdaftar. Coba login, atau gunakan email lain.';
+          break;
+        case 'weak-password':
+          msg = 'Password terlalu lemah. Minimal 6 karakter.';
+          break;
+        case 'invalid-email':
+          msg = 'Format email tidak valid.';
+          break;
+        case 'network-request-failed':
+          msg = 'Tidak bisa terhubung ke server. Cek koneksi internet kamu.';
+          break;
+        case 'operation-not-allowed':
+          msg = 'Metode email/password belum diaktifkan di Firebase.';
+          break;
+        case 'too-many-requests':
+          msg = 'Terlalu banyak percobaan. Tunggu beberapa saat lalu coba lagi.';
+          break;
+        default:
+          msg = '[$code] ${e.message ?? 'Registrasi gagal'}';
+      }
+      _showError(msg);
+    } catch (e) {
+      _showError('Terjadi kesalahan: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

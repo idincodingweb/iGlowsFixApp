@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/theme/app_theme.dart';
 import 'auth_service.dart';
+import 'verify_email_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,22 +50,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showVerifyDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Email belum diverifikasi'),
-        content: Text(
-          'Akun ${_email.text.trim()} belum diverifikasi.\n\n'
-          'Kami sudah kirim ulang link verifikasi ke Gmail kamu. '
-          'Buka inbox/Spam, klik link tersebut, lalu coba login lagi.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    VerifyEmailDialog.show(
+      context,
+      email: _email.text.trim(),
+      isJustRegistered: false,
+      onResend: () async {
+        // Sign-in lalu sendEmailVerification (lewat AuthService).
+        await _auth.resendVerification(
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+      },
     );
   }
 
