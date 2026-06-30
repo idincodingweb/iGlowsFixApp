@@ -165,19 +165,19 @@ class VerifyEmailDialog extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Step-by-step
-            _StepItem(
+            const _StepItem(
               num: '1',
               text: 'Buka aplikasi Gmail kamu',
             ),
-            _StepItem(
+            const _StepItem(
               num: '2',
               text: 'Cari email dari "iGlows" — cek INBOX dan FOLDER SPAM',
             ),
-            _StepItem(
+            const _StepItem(
               num: '3',
               text: 'Klik tombol / link verifikasi di dalam email',
             ),
-            _StepItem(
+            const _StepItem(
               num: '4',
               text: 'Balik ke aplikasi iGlows, lalu login 💖',
               isLast: true,
