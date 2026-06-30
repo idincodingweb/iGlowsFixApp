@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kebijakan Privasi iGlows / GlowCare</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #FF8FB1; border-bottom: 2px solid #FFC2D4; padding-bottom: 10px; }
+        h3 { color: #FF8FB1; margin-top: 25px; }
+        hr { border: 0; height: 1px; background: #FFC2D4; margin: 20px 0; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Kebijakan Privasi iGlows / GlowCare</h1>
+    <p><strong>Terakhir Diperbarui:</strong> 30 Juni 2026</p>
+    <p>Selamat datang di iGlows / GlowCare ("Aplikasi"). Kami berkomitmen untuk melindungi dan menghormati privasi Anda sebagai pengguna. Kebijakan Privasi ini dirancang untuk menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi informasi pribadi Anda sesuai dengan Undang-Undang Perlindungan Data Pribadi (UU PDP) di Indonesia dan standar distribusi aplikasi global.</p>
+    <p>Dengan mengunduh, menginstal, dan menggunakan Aplikasi ini, Anda menyatakan bahwa Anda telah membaca, memahami, dan menyetujui seluruh ketentuan dalam Kebijakan Privasi ini.</p>
+    <hr>
+    <h3>1. Informasi yang Kami Kumpulkan</h3>
+    <p>Kami hanya mengumpulkan informasi yang diperlukan untuk menyediakan, meningkatkan, dan mengoptimalkan fungsionalitas fitur kecantikan berbasis AI di dalam Aplikasi. Informasi tersebut meliputi:</p>
+    <ul>
+        <li><strong>Informasi Akun Dasar:</strong> Alamat email (wajib menggunakan Gmail) dan nama pengguna yang Anda daftarkan melalui sistem enkripsi pihak ketiga.</li>
+        <li><strong>Preferensi dan Profil Kulit:</strong> Data jenis kulit (normal, kering, berminyak, kombinasi, sensitif) serta masalah/keluhan kulit yang Anda masukkan secara mandiri demi personalisasi rekomendasi perawatan.</li>
+        <li><strong>Data Analisis & Pemrosesan Citra (Wajah):</strong> Foto wajah yang Anda ambil melalui kamera atau galeri untuk fitur <em>Skin Analyzer</em>. Foto ini akan dikompresi secara lokal di perangkat Anda menjadi format base64 untuk keperluan enkripsi data transmisi.</li>
+        <li><strong>Riwayat Aktivitas Aplikasi:</strong> Log checklist rutinitas harian (<em>routines</em>), riwayat pengingat (<em>reminders</em>), skor kulit harian (<em>Daily Skin Score</em>), serta riwayat interaksi pesan teks dengan fitur Asisten AI (Glowy).</li>
+    </ul>
+    <h3>2. Tempat dan Metode Penyimpanan Data</h3>
+    <p>Keamanan data Anda adalah prioritas utama kami. Mekanisme penyimpanan data diatur sebagai berikut:</p>
+    <ul>
+        <li><strong>Penyimpanan Cloud:</strong> Seluruh data utama profil, riwayat analisis, dan data interaksi di-host secara aman menggunakan layanan <strong>Google Firebase (Authentication & Cloud Firestore)</strong> milik Google LLC.</li>
+        <li><strong>Penyimpanan Lokal:</strong> Informasi preferensi umum, status pengaturan, dan <em>cache</em> harian disimpan secara lokal di dalam memori internal perangkat Anda menggunakan enkripsi <code>SharedPreferences</code>.</li>
+        <li><strong>Pemrosesan Foto:</strong> Foto hasil scan wajah diproses secara lokal terlebih dahulu di dalam perangkat Anda, dan hanya akan dikirimkan ke layanan AI penyedia model pada saat Anda secara eksplisit meminta proses analisis wajah.</li>
+    </ul>
+    <h3>3. Layanan Pihak Ketiga (Integrasi API)</h3>
+    <p>Untuk menyediakan fitur kecantikan pintar yang akurat, Aplikasi bekerja sama dengan penyedia layanan pihak ketiga yang tepercaya:</p>
+    <ul>
+        <li><strong>Pemrosesan AI (Glowy & Skin Analyzer):</strong> Saat Anda mengirimkan pertanyaan teks atau foto wajah, data tersebut diteruskan ke penyedia model <strong>Groq</strong> untuk diproses secara real-time. Kami memastikan bahwa pihak ketiga tidak menyimpan riwayat teks atau foto tersebut di server mereka melebihi batas waktu yang diperlukan untuk memberikan respons kepada Anda.</li>
+        <li><strong>Layanan Peta & Lokasi:</strong> Fitur pencarian lokasi salon atau klinik terdekat menggunakan integrasi layanan Maps pihak ketiga (<strong>RapidAPI</strong>). Lokasi perangkat Anda hanya diakses apabila Anda memberikan izin akses lokasi (<em>Location Permission</em>) di perangkat Anda, dan data lokasi tersebut tidak pernah disimpan secara permanen di server kami.</li>
+    </ul>
+    <h3>4. Hak Atas Data Anda (Penghapusan Permanen)</h3>
+    <p>Sesuai dengan regulasi UU PDP, Anda memegang kendali penuh atas data pribadi Anda sendiri.</p>
+    <ul>
+        <li>Anda berhak meminta salinan data atau mengajukan penghapusan seluruh data pribadi Anda secara permanen dari sistem kami kapan saja.</li>
+        <li>Proses penghapusan akun akan secara otomatis melenyapkan data profil, seluruh riwayat analisis kulit, riwayat konsultasi AI, serta log rutinitas yang terkait dengan UID akun Anda tanpa menyisakan cadangan.</li>
+        <li>Untuk mengajukan permohonan penghapusan data, Anda dapat menghubungi kami secara langsung melalui email pengembang di: <strong>idiniskandar.tech@gmail.com</strong></li>
+    </ul>
+    <h3>5. Kepatuhan Anak-Anak</h3>
+    <p>Aplikasi ini tidak ditujukan untuk mengumpulkan data dari anak-anak di bawah usia 13 tahun secara sengaja. Jika Anda adalah orang tua atau wali dan menyadari bahwa anak Anda telah memberikan data pribadi kepada kami, harap hubungi kami segera melalui email agar kami dapat melakukan tindakan penghapusan data.</p>
+    <h3>6. Perubahan pada Kebijakan Privasi</h3>
+    <p>Kami dapat memperbarui Kebijakan Privasi ini dari waktu ke waktu guna menyesuaikan dengan perkembangan fitur aplikasi atau perubahan regulasi hukum yang berlaku. Setiap perubahan akan diinformasikan secara transparan melalui Aplikasi atau media publik terkait.</p>
+</body>
+</html>
