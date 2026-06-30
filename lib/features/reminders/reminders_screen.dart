@@ -184,18 +184,20 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           if (!context.mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text('Test reminder dikirim ✨')),
+                                content: Text(
+                                    'Contoh notifikasi dikirim ✨ Cek bar notifikasi HP kamu.')),
                           );
                         },
                   icon: const Icon(Icons.notifications_active_outlined),
-                  label: const Text('Kirim test reminder'),
+                  label: const Text('Coba kirim notifikasi sekarang'),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Catatan: di Android 13+ HP akan minta izin notifikasi pertama kali kamu nyalain reminder.',
+                  'Catatan: Android 13+ akan minta izin notifikasi & izin "alarm tepat waktu" saat pertama kali kamu nyalain reminder. Pastikan keduanya diizinkan biar pengingat muncul pas jamnya.',
                   style: tt.bodySmall
                       ?.copyWith(color: AppColors.textSecondary),
                 ),
+
               ],
             ),
     );

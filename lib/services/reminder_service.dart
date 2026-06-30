@@ -45,8 +45,24 @@ class ReminderService {
     try {
       tzdata.initializeTimeZones();
       try {
-        // Default ke WIB kalau gagal deteksi.
-        tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+        // Deteksi timezone berdasarkan offset device biar jadwal akurat
+        // di WIB / WITA / WIT (atau zona lain).
+        final offsetH = DateTime.now().timeZoneOffset.inHours;
+        String name;
+        switch (offsetH) {
+          case 7:
+            name = 'Asia/Jakarta';
+            break;
+          case 8:
+            name = 'Asia/Makassar';
+            break;
+          case 9:
+            name = 'Asia/Jayapura';
+            break;
+          default:
+            name = 'Asia/Jakarta';
+        }
+        tz.setLocalLocation(tz.getLocation(name));
       } catch (_) {/* biarin default UTC */}
 
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -64,8 +80,9 @@ class ReminderService {
     }
   }
 
-  /// Request permission notifikasi (Android 13+ & iOS). Return true kalau
-  /// dikasih atau gak butuh request.
+  /// Request permission notifikasi (Android 13+ & iOS) + exact alarm
+  /// permission (Android 12+). Tanpa exact alarm permission, jadwal bisa
+  /// di-delay / di-skip oleh Doze mode dan notifikasi gak muncul tepat waktu.
   Future<bool> requestPermission() async {
     await init();
     try {
@@ -73,6 +90,10 @@ class ReminderService {
         final impl = _plugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
         final granted = await impl?.requestNotificationsPermission();
+        // Penting: minta izin schedule exact alarm di Android 12+.
+        try {
+          await impl?.requestExactAlarmsPermission();
+        } catch (_) {/* device lama / gak butuh */}
         return granted ?? true;
       } else if (Platform.isIOS) {
         final impl = _plugin.resolvePlatformSpecificImplementation<
@@ -89,6 +110,7 @@ class ReminderService {
     }
     return true;
   }
+
 
   // ---------- Settings ----------
   Future<ReminderSettings> loadSettings() async {
@@ -177,19 +199,19 @@ class ReminderService {
     } catch (_) {/* safe */}
   }
 
-  /// Trigger manual buat user yg mau test reminder tanpa nunggu jam.
-  /// Juga nge-push entri ke Firestore inbox kalau login.
+  /// Kirim notifikasi contoh sekarang juga (tanpa nunggu jam) buat
+  /// memastikan izin notifikasi udah aktif & user tau preview-nya.
   Future<void> fireTest() async {
     await init();
     try {
       await _plugin.show(
         9999,
-        'Test reminder iGlows ✨',
-        'Kalau kamu lihat ini, reminder lokal udah aktif.',
+        'Pengingat iGlows aktif ✨',
+        'Notifikasi kamu udah siap. Rutinitas pagi & malam akan jalan otomatis sesuai jam yang kamu pilih.',
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'iglows_test',
-            'Test Reminder',
+            'iglows_routine',
+            'Rutinitas Skincare',
             importance: Importance.high,
             priority: Priority.high,
           ),
@@ -201,12 +223,14 @@ class ReminderService {
     }
     try {
       await NotificationService.instance.add(
-        title: 'Test reminder ✨',
-        body: 'Reminder lokal aktif. Schedule pagi/malam akan jalan otomatis.',
+        title: 'Pengingat iGlows aktif ✨',
+        body:
+            'Notifikasi kamu udah siap. Rutinitas pagi & malam akan jalan otomatis sesuai jam yang kamu pilih.',
         kind: 'reminder',
       );
     } catch (_) {/* safe */}
   }
+
 
   // ---------- Internal ----------
   Future<void> _scheduleDaily({
@@ -233,7 +257,7 @@ class ReminderService {
         ),
         iOS: const DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time,
@@ -268,7 +292,7 @@ class ReminderService {
         ),
         iOS: const DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,

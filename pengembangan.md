@@ -903,3 +903,21 @@ kecantikan, diet, dan lifestyle — konten yang bisa user konsumsi tiap hari.
   klinik). Saat ini sekadar tidak di-route dari bottom nav.
 - Tidak ada dependency baru — semua dibangun memakai widget existing
   (`GlowCard`, `PillChip`) dan `Image.network`.
+
+## M13 — Fix Reminder: Wording Profesional + Exact Alarm
+
+**Masalah:**
+1. Notifikasi muncul dengan judul "Test reminder ✨" — gak profesional buat user nyata.
+2. Notifikasi terjadwal (pagi/malam) sering gak muncul tepat waktu di Android.
+
+**Perbaikan:**
+- `lib/services/reminder_service.dart`:
+  - `fireTest()` sekarang pakai judul "Pengingat iGlows aktif ✨" + body yang user-friendly (push notification & inbox entry sama).
+  - Schedule pagi & malam diganti dari `AndroidScheduleMode.inexactAllowWhileIdle` → `exactAllowWhileIdle` biar lolos Doze mode dan muncul tepat detik.
+  - `requestPermission()` sekarang juga panggil `requestExactAlarmsPermission()` (Android 12+) — tanpa izin ini, sistem boleh delay/skip alarm.
+  - Auto-detect timezone device (WIB/WITA/WIT) dari `DateTime.now().timeZoneOffset` — sebelumnya hardcoded `Asia/Jakarta` doang, bikin user di luar WIB ketrigger di jam salah.
+- `lib/features/reminders/reminders_screen.dart`:
+  - Tombol "Kirim test reminder" → "Coba kirim notifikasi sekarang".
+  - Snackbar konfirmasi diperjelas.
+  - Catatan footer disempurnakan: jelasin user perlu kasih izin notifikasi **dan** izin "alarm tepat waktu".
+- `AndroidManifest.xml` sudah punya `SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM` permission sebelumnya, tinggal di-request runtime-nya.
