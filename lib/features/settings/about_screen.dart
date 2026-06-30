@@ -217,7 +217,7 @@ class AboutScreen extends StatelessWidget {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: const [
+              children: [
                 _Chip('Flutter'),
                 _Chip('Firebase'),
                 _Chip('Groq AI'),
