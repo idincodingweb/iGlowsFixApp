@@ -958,3 +958,11 @@ Melengkapi 4 menu di Profile yang sebelumnya cuma snackbar "akan tersedia segera
 - Tidak menambah dependency baru — pakai `shared_preferences`, `url_launcher`, `firebase_auth` yang sudah ada.
 - Tidak menyentuh `android/`, `google-services.json`, `firebase_options.dart`, atau workflow GitHub Actions.
 - Konsisten pakai `AppColors`, `GlowCard`, `SectionHeader`. Tidak ada warna hardcoded di luar brand color resmi sosmed (LinkedIn `#0A66C2`, Instagram `#E1306C`).
+
+## 30 Juni 2026 — Update Launcher Icon
+
+- Mengganti launcher icon Android dengan desain baru (siluet wanita + bunga, gradient pink-peach) dari `assets/icon/app_icon.png`.
+- Menambahkan **adaptive icon** (Android 8.0+) di `mipmap-anydpi-v26/ic_launcher.xml` dan `ic_launcher_round.xml`:
+  - `background` = full-bleed bitmap icon di semua densitas (mdpi 108 → xxxhdpi 432).
+  - `foreground` = transparan, sehingga ikon tampil **edge-to-edge tanpa background putih** (mirip ikon Instagram).
+- Legacy `ic_launcher.png` di semua mipmap (mdpi 48 → xxxhdpi 192) juga di-regenerate dari aset baru sebagai fallback.
