@@ -200,7 +200,7 @@ class _AnalyzerScreenState extends State<AnalyzerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Skin Analyzer'),
+        title: const Text('Skin Analyst'),
         actions: [
           IconButton(
             tooltip: 'Riwayat',
@@ -430,7 +430,7 @@ class _AnalyzerScreenState extends State<AnalyzerScreen>
           children: [
             const Icon(Icons.auto_awesome, color: AppColors.primary),
             const SizedBox(width: 6),
-            Text('AI Recommendations',
+            Text('Rekomendasi Konsultan iGlows',
                 style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
           ],
         ),

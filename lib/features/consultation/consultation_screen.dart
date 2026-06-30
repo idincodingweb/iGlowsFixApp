@@ -251,10 +251,10 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Glowy',
+                Text('Dokter Ahli iGlows',
                     style: tt.titleMedium
                         ?.copyWith(fontWeight: FontWeight.w700)),
-                Text('AI Beauty Assistant',
+                Text('Team ahli iGlows',
                     style: tt.bodySmall?.copyWith(color: AppColors.primary)),
               ],
             ),
@@ -309,7 +309,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
-                              child: Text('Foto siap dikirim ke Glowy 📸')),
+                              child: Text('Foto siap dikirim ke Dokter Ahli iGlows 📸')),
                           IconButton(
                             icon: const Icon(Icons.close),
                             onPressed: () => setState(() {
@@ -339,7 +339,7 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
                             textInputAction: TextInputAction.send,
                             onSubmitted: (_) => _send(),
                             decoration: const InputDecoration(
-                              hintText: 'Tanya Glowy apapun...',
+                              hintText: 'Tanya Dokter Ahli iGlows...',
                             ),
                           ),
                         ),
