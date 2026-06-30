@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/notification_item.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/glow_widgets.dart';
+import '../../widgets/native_ad_card.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -68,9 +69,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           }
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-            itemCount: items.length,
+            // +1 slot di akhir untuk Native Ad (M17).
+            itemCount: items.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (_, i) {
+              if (i == items.length) {
+                return const NativeAdCard();
+              }
               final n = items[i];
               return GlowCard(
                 child: Row(

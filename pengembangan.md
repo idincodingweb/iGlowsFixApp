@@ -1059,3 +1059,60 @@ match /app_updates/{doc}  { allow read: if true; }
 ### Catatan
 - `package_info_plus` SENGAJA tidak ditambahkan untuk menjaga `pubspec.yaml` ramping; pakai konstanta `kAppVersion` di `app_update_service.dart`.
 - Endpoint baru memakai pola yang sama dengan `articles.ts` (Firestore REST + API key publik) → tidak butuh service-account.
+
+---
+
+## M17 — Monetisasi AdMob (Interstitial + Rewarded + Native)
+
+**Tujuan:** Eksekusi pilar monetisasi free-tier dari `roadmapfinal.md`
+BAGIAN 2 — pasang 3 format AdMob di titik *natural break* yang patuh
+policy Google (no accidental click, tidak overlap konten interaktif).
+
+### Penempatan & trigger
+| Format | Lokasi | Trigger |
+| :--- | :--- | :--- |
+| **Interstitial** | Skin Analyst (`features/analyzer/analyzer_screen.dart`) | Setiap **3x analisa selesai** (`analyzerCount % 3 == 0`). |
+| **Rewarded** | Chat Konsultasi (`features/consultation/consultation_screen.dart`) | Mulai dari **pesan ke-5** user, lalu setiap kelipatan 5 (5, 10, 15, ...). |
+| **Native Advanced** | Tab Notifikasi (`features/notifications/notifications_screen.dart`) | Diselipkan sebagai card terakhir di list notifikasi. |
+
+### Ad Unit IDs (production)
+- App ID: `ca-app-pub-4040764940734722~6432580352`
+- Interstitial: `ca-app-pub-4040764940734722/9846311837`
+- Rewarded:     `ca-app-pub-4040764940734722/7807874225`
+- Native:       `ca-app-pub-4040764940734722/7958515094`
+
+### Implementasi
+- Dependency baru: `google_mobile_ads: ^5.1.0` di `pubspec.yaml`.
+- `android/app/src/main/AndroidManifest.xml` — ditambah `<meta-data>`
+  `com.google.android.gms.ads.APPLICATION_ID` (wajib, kalau gak ada SDK
+  bakal crash di startup).
+- `lib/services/ads_service.dart` — singleton `AdsService.instance`:
+  - `init()` panggil `MobileAds.instance.initialize()` (dipanggil dari
+    `main.dart`, dibungkus try/catch, *non-blocking* UI).
+  - Preload interstitial + rewarded saat boot, auto re-preload tiap kali
+    dismissed/failed.
+  - `onAnalyzerCompleted()` & `onConsultMessageSent()` — counter
+    in-memory per sesi app, tampilkan iklan saat threshold tercapai.
+- `lib/widgets/native_ad_card.dart` — `NativeAdCard` pakai
+  `NativeTemplateStyle(templateType: TemplateType.medium)` bawaan SDK
+  (tanpa Kotlin `NativeAdFactory`, jadi `MainActivity.kt` & file native
+  Android lain **tidak disentuh**). Warna template diselaraskan dengan
+  `AppColors.primary` / `AppColors.surface` biar nyatu di tema soft-pink.
+  Gagal load → widget render `SizedBox.shrink()` (silent fallback, sesuai
+  policy "no broken UI").
+- `lib/main.dart` — init AdMob setelah Firebase + ReminderService, semua
+  dibungkus try/catch agar startup tidak pernah crash gara-gara AdMob.
+
+### Catatan SOP
+- Tidak menyentuh `lib/firebase_options.dart`, `google-services.json`,
+  Gradle wrapper, root `build.gradle`, atau workflow CI.
+- `android/app/build.gradle` **tidak diubah** (google_mobile_ads pakai
+  auto-plugin Gradle; minSdk 23 yang ada sudah memenuhi syarat ≥ 21).
+- Counter trigger sengaja in-memory (bukan SharedPreferences) supaya
+  reset tiap sesi — sesuai pola natural break-point dan menghindari
+  iklan langsung muncul saat user baru buka app.
+- Logika *premium ad-free* (BAGIAN 1 roadmapfinal.md) **belum**
+  diimplement di milestone ini — masih nunggu integrasi payment gateway
+  QRIS. Saat itu tiba, cukup tambahkan early-return `if (user.isPremium)`
+  di tiga method publik `AdsService` (`onAnalyzerCompleted`,
+  `onConsultMessageSent`, `NativeAdCard.build`).

@@ -8,10 +8,12 @@ import '../../core/theme/app_theme.dart';
 import '../../models/skin_profile.dart';
 import '../../services/analyzer_history_service.dart';
 import '../../services/analyzer_service.dart';
+import '../../services/ads_service.dart';
 import '../../services/groq_service.dart';
 import '../../services/local_store.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/glow_widgets.dart';
+
 import 'analyzer_compare_screen.dart';
 import 'analyzer_history_screen.dart';
 
@@ -150,7 +152,13 @@ class _AnalyzerScreenState extends State<AnalyzerScreen>
         dedupeKey: 'analyzer_$dk',
       );
     } catch (_) {}
+
+    // M17: tampilkan interstitial tiap 3x analisa selesai (free user).
+    try {
+      await AdsService.instance.onAnalyzerCompleted();
+    } catch (_) {}
   }
+
 
   void _showPickSheet() {
     showModalBottomSheet(

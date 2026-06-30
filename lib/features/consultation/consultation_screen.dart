@@ -10,6 +10,8 @@ import '../../models/skin_profile.dart';
 import '../../services/consultation_service.dart';
 import '../../services/groq_service.dart';
 import '../../services/local_store.dart';
+import '../../services/ads_service.dart';
+
 
 class ConsultationScreen extends StatefulWidget {
   /// Optional: buka session existing.
@@ -180,6 +182,15 @@ class _ConsultationScreenState extends State<ConsultationScreen> {
         _titleSet = true;
       }
     }
+
+    // M17: trigger rewarded ad tiap kelipatan 5 pesan user (5,10,15,...).
+    try {
+      await AdsService.instance.onConsultMessageSent();
+    } catch (_) {}
+
+
+
+
 
     try {
       final reply =

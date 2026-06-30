@@ -10,6 +10,7 @@ import 'features/auth/auth_gate.dart';
 import 'features/home/home_shell.dart';
 import 'features/reminders/reminders_screen.dart';
 import 'services/reminder_service.dart';
+import 'services/ads_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,8 +27,17 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('Reminder init error: $e');
   }
+  // M17: init AdMob — safe-fail, gak nge-block UI.
+  try {
+    await AdsService.instance.init();
+    AdsService.instance.preloadInterstitial();
+    AdsService.instance.preloadRewarded();
+  } catch (e) {
+    debugPrint('AdMob init error: $e');
+  }
   runApp(const IGlowsApp());
 }
+
 
 class IGlowsApp extends StatelessWidget {
   const IGlowsApp({super.key});
