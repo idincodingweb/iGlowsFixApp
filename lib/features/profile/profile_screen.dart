@@ -6,6 +6,10 @@ import '../../models/skin_profile.dart';
 import '../../services/local_store.dart';
 import '../../widgets/glow_widgets.dart';
 import '../auth/auth_service.dart';
+import '../settings/about_screen.dart';
+import '../settings/help_screen.dart';
+import '../settings/notifications_settings_screen.dart';
+import '../settings/privacy_security_screen.dart';
 import 'edit_skin_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -164,10 +168,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SectionHeader(title: 'Pengaturan'),
           _menu(Icons.alarm, 'Reminder Skincare',
               onTap: () => Navigator.pushNamed(context, '/reminders')),
-          _menu(Icons.notifications_none, 'Notifikasi'),
-          _menu(Icons.lock_outline, 'Privasi & Keamanan'),
-          _menu(Icons.help_outline, 'Bantuan'),
-          _menu(Icons.info_outline, 'Tentang iGlows'),
+          _menu(Icons.notifications_none, 'Notifikasi', onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const NotificationsSettingsScreen()));
+          }),
+          _menu(Icons.lock_outline, 'Privasi & Keamanan', onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const PrivacySecurityScreen()));
+          }),
+          _menu(Icons.help_outline, 'Bantuan', onTap: () {
+            Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HelpScreen()));
+          }),
+          _menu(Icons.info_outline, 'Tentang iGlows', onTap: () {
+            Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AboutScreen()));
+          }),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: _logout,

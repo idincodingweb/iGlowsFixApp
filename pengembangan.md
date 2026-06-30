@@ -921,3 +921,40 @@ kecantikan, diet, dan lifestyle — konten yang bisa user konsumsi tiap hari.
   - Snackbar konfirmasi diperjelas.
   - Catatan footer disempurnakan: jelasin user perlu kasih izin notifikasi **dan** izin "alarm tepat waktu".
 - `AndroidManifest.xml` sudah punya `SCHEDULE_EXACT_ALARM` + `USE_EXACT_ALARM` permission sebelumnya, tinggal di-request runtime-nya.
+
+---
+
+## Milestone — Settings Pages Profile (30 Juni 2026)
+
+Melengkapi 4 menu di Profile yang sebelumnya cuma snackbar "akan tersedia segera":
+**Notifikasi, Privasi & Keamanan, Bantuan, Tentang iGlows**.
+
+### File baru
+- `lib/features/settings/notifications_settings_screen.dart`
+  - Halaman preferensi notifikasi (master switch, suara, reminder skincare, tips, promo).
+  - Disimpan lokal via `SharedPreferences` (`notif_*`), tidak butuh perubahan backend.
+  - Punya entry "Lihat semua notifikasi" yang membuka `NotificationsScreen` (riwayat) lama.
+- `lib/features/settings/privacy_security_screen.dart`
+  - Info akun (email, status verifikasi), tombol **Reset password** via `FirebaseAuth.sendPasswordResetEmail`.
+  - Ringkasan privasi: data yang dikumpulkan, penyimpanan (Firebase + lokal), layanan AI pihak ketiga (Groq), lokasi (RapidAPI Maps), hak hapus data.
+  - Tombol kontak email developer via `url_launcher` (`mailto:`).
+- `lib/features/settings/help_screen.dart`
+  - Panduan step-by-step 8 fitur: daftar/masuk, skin profile, rutin, reminder, analyzer, Glowy AI, produk/salon, notifikasi.
+  - Section FAQ pakai `ExpansionTile` (5 pertanyaan umum).
+- `lib/features/settings/about_screen.dart`
+  - Kartu developer: **Idin Iskandar, S.Kom** – `idiniskandar.tech@gmail.com`.
+  - Tombol social: **LinkedIn** (`https://www.linkedin.com/in/idin-iskandar-163773271`) & **Instagram** (`https://instagram.com/idin_iskndr`) buka via `launchUrl(externalApplication)`.
+  - Ikon LinkedIn dibuat custom (mark "in") supaya tetap zero-deps.
+  - Tentang aplikasi, daftar fitur unggulan, chip tech stack, copyright.
+
+### File diubah
+- `lib/features/profile/profile_screen.dart`
+  - Import 4 screen baru.
+  - Menu **Notifikasi / Privasi & Keamanan / Bantuan / Tentang iGlows** sekarang `Navigator.push` ke screen masing-masing (sebelumnya jatuh ke fallback snackbar).
+  - Tidak ada perubahan struktur card profil / streak.
+
+### Catatan teknis
+- Semua `Future` di `initState` (notifications settings load) sudah dibungkus `try/catch` + fallback `_loading = false` sesuai SOP anti-mentok.
+- Tidak menambah dependency baru — pakai `shared_preferences`, `url_launcher`, `firebase_auth` yang sudah ada.
+- Tidak menyentuh `android/`, `google-services.json`, `firebase_options.dart`, atau workflow GitHub Actions.
+- Konsisten pakai `AppColors`, `GlowCard`, `SectionHeader`. Tidak ada warna hardcoded di luar brand color resmi sosmed (LinkedIn `#0A66C2`, Instagram `#E1306C`).
