@@ -14,7 +14,7 @@ const List<String> articleCategories = <String>[
 ];
 
 /// Sampel artikel — gambar dari Unsplash (gratis, hotlinkable).
-final List<Article> sampleArticles = <Article>[
+const List<Article> sampleArticles = <Article>[
   Article(
     id: 'a1',
     title: '10 Langkah Skincare Pagi untuk Kulit Glowing Sepanjang Hari',
