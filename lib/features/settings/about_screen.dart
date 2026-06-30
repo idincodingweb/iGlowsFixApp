@@ -213,7 +213,7 @@ class AboutScreen extends StatelessWidget {
               )),
 
           const SectionHeader(title: 'Teknologi'),
-          GlowCard(
+          const GlowCard(
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
