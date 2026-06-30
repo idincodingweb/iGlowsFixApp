@@ -966,3 +966,96 @@ Melengkapi 4 menu di Profile yang sebelumnya cuma snackbar "akan tersedia segera
   - `background` = full-bleed bitmap icon di semua densitas (mdpi 108 → xxxhdpi 432).
   - `foreground` = transparan, sehingga ikon tampil **edge-to-edge tanpa background putih** (mirip ikon Instagram).
 - Legacy `ic_launcher.png` di semua mipmap (mdpi 48 → xxxhdpi 192) juga di-regenerate dari aset baru sebagai fallback.
+
+---
+
+## M14 — Articles dari Admin Dashboard (Hapus Dummy)
+
+Tanggal: 30 Juni 2026
+
+### Tujuan
+Hilangkan 12 artikel dummy di tab Articles. Sumber artikel sekarang
+**100% di-fetch real-time** dari Admin Dashboard yang sudah owner deploy
+ke Vercel (`https://iglowsadmin.vercel.app/api/public/articles`). Konsisten dengan
+arsitektur di `rencanafiturupdateaplikasi.md` (dashboard injeksi konten).
+
+### File diubah / dibuat
+- **NEW** `lib/services/articles_service.dart` — singleton HTTP client
+  GET ke `https://iglowsadmin.vercel.app/api/public/articles`. Public endpoint, no
+  auth, timeout 15s. Toleran 4 bentuk response: array langsung,
+  `{articles:[...]}`, `{data:[...]}`, `{items:[...]}`. Fail-safe: error
+  apapun → return `[]` (UI tampil empty state, bukan crash).
+- **UPDATE** `lib/models/article.dart` — tambah `Article.fromJson(...)`
+  dengan default aman per field (id, title, category='Lifestyle',
+  excerpt, imageUrl, author='iGlows Editorial', readMinutes='3 min',
+  publishedAt, sections[], tags[]). Toleransi field snake_case
+  (`image_url`, `read_minutes`, `published_at`) maupun camelCase.
+- **UPDATE** `lib/services/sample_articles.dart` — **hapus seluruh
+  `sampleArticles`** (12 dummy). Hanya menyisakan konstanta
+  `articleCategories` yang masih dipakai untuk pill chip filter.
+- **UPDATE** `lib/features/articles/articles_screen.dart` — refactor:
+  - `StatefulWidget` dengan `_load()` di `initState` (try/catch +
+    fallback `_loading=false` sesuai SOP anti-mentok).
+  - `RefreshIndicator` (pull-to-refresh) memanggil ulang
+    `ArticlesService.fetchArticles()`.
+  - Empty state khusus: (a) kalau seluruh list kosong → "Belum ada
+    artikel" + tombol "Muat ulang", (b) kalau filter kategori kosong →
+    "Belum ada artikel di kategori X".
+  - Loading state pakai `CircularProgressIndicator` pink.
+  - Card image-less aman (placeholder 📰) ketika admin upload artikel
+    tanpa `imageUrl`.
+
+### Catatan
+- Tidak ada dependency baru — pakai `http: ^1.2.2` yang sudah terdaftar
+  sejak Milestone 3.
+- Tidak ada cache offline (sesuai pilihan owner: empty state murni).
+  Bisa ditambah `SharedPreferences` cache di milestone berikutnya kalau
+  diperlukan.
+- Endpoint public — tidak ada secret tambahan yang perlu didaftarin di
+  GitHub Actions.
+- Tidak menyentuh `android/`, `google-services.json`, workflow CI,
+  maupun `firebase_options.dart`.
+
+---
+
+## M15 — Public JSON API di Admin Dashboard
+
+Tanggal: 30 Jun 2026. Admin dashboard (TanStack Start, deploy Vercel) sekarang
+expose endpoint publik JSON di `/api/public/articles` — proxy Firestore REST
+API → bentuk JSON yang langsung dipakai `ArticlesService` Flutter. Endpoint
+HTML lama `/articles` tetap untuk UI admin. URL Flutter sudah diupdate.
+
+- File baru (admin dashboard): `src/routes/api/public/articles.ts`.
+- Cache 60 detik (`Cache-Control: public, max-age=60`).
+- CORS `*` (read-only public).
+- Tidak menyentuh `vercel.json`, build command, atau route lain.
+
+---
+
+## M16 — Inject Products & Broadcast App Update dari Admin Dashboard
+
+**Tujuan:** Aktifkan dua aksi cepat admin dashboard (Vercel) ke aplikasi:
+1. **Broadcast Update** — dialog real-time muncul di user kalau admin suntik versi baru.
+2. **Inject Product** — produk baru dari admin tampil di tab Products.
+
+### Admin Dashboard (Vercel)
+- `src/routes/api/public/products.ts` — GET list produk dari Firestore `products` (sort terbaru, cache 60s).
+- `src/routes/api/public/app-update.ts` — GET broadcast TERBARU dari Firestore `app_updates` via `runQuery` (orderBy `created_at` desc, limit 1). Return `{available:false}` kalau kosong.
+- Konfigurasi Vercel & build command TIDAK diubah → aman dari 404.
+
+### Flutter
+- `lib/services/products_service.dart` — fetcher produk (fail-safe → `[]`).
+- `lib/services/app_update_service.dart` — fetcher broadcast + `kAppVersion = '0.1.0'` + semver comparator. Update manual `kAppVersion` setiap release.
+- `lib/widgets/app_update_dialog.dart` — dialog modal soft-pink, tombol unduh via `url_launcher`. Force-update → non-dismissable.
+- `lib/features/products/products_screen.dart` — gabung `_remote` DI DEPAN `sampleProducts` (dummy DIPERTAHANKAN sementara untuk mempercantik halaman, sesuai permintaan user). Tambah pull-to-refresh + tombol reload + kategori `Treatment`.
+- `lib/features/home/home_shell.dart` — `addPostFrameCallback` → cek update sekali per sesi setelah login, tampilkan dialog kalau `latest_version > kAppVersion`.
+
+### Firestore Rules tambahan
+```
+match /products/{doc}     { allow read: if true; }
+match /app_updates/{doc}  { allow read: if true; }
+```
+
+### Catatan
+- `package_info_plus` SENGAJA tidak ditambahkan untuk menjaga `pubspec.yaml` ramping; pakai konstanta `kAppVersion` di `app_update_service.dart`.
+- Endpoint baru memakai pola yang sama dengan `articles.ts` (Firestore REST + API key publik) → tidak butuh service-account.

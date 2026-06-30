@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/product.dart';
+import '../../services/products_service.dart';
 import '../../services/sample_data.dart';
 import '../../widgets/glow_widgets.dart';
 import 'product_detail_screen.dart';
@@ -16,9 +17,31 @@ class ProductsScreen extends StatefulWidget {
 class _ProductsScreenState extends State<ProductsScreen> {
   String _cat = 'All';
   String _query = '';
+  List<Product> _remote = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final remote = await ProductsService.instance.fetchProducts();
+    if (!mounted) return;
+    setState(() {
+      _remote = remote;
+      _loading = false;
+    });
+  }
+
+  /// Gabung remote (admin dashboard) DI DEPAN dummy supaya produk asli
+  /// muncul duluan; dummy dipertahankan sementara untuk mempercantik halaman.
+  List<Product> get _all => [..._remote, ...sampleProducts];
 
   List<Product> get _filtered {
-    var list = sampleProducts;
+    var list = _all;
     if (_cat != 'All') {
       list = list.where((p) => p.category == _cat).toList();
     }
@@ -36,126 +59,143 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final cats = ['All', 'Cleanser', 'Toner', 'Serum', 'Moisturizer', 'Sunscreen', 'Mask'];
+    final cats = ['All', 'Cleanser', 'Toner', 'Serum', 'Moisturizer', 'Sunscreen', 'Mask', 'Treatment'];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Products')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Cari produk...',
-                prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
+      appBar: AppBar(
+        title: const Text('Products'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            icon: _loading
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  )
+                : const Icon(Icons.refresh_rounded),
+            onPressed: _loading ? null : _load,
           ),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final c in cats)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: PillChip(
-                      label: c,
-                      selected: _cat == c,
-                      onTap: () => setState(() => _cat = c),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Cari produk...',
+                  prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            SizedBox(
+              height: 44,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final c in cats)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: PillChip(
+                        label: c,
+                        selected: _cat == c,
+                        onTap: () => setState(() => _cat = c),
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: .68,
+                ],
               ),
-              itemCount: _filtered.length,
-              itemBuilder: (_, i) {
-                final p = _filtered[i];
-                return GlowCard(
-                  padding: const EdgeInsets.all(12),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ProductDetailScreen(product: p))),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: double.infinity,
-                            color: AppColors.primarySoft.withValues(alpha: .35),
-                            alignment: Alignment.center,
-                            child: p.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    p.imageUrl,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    loadingBuilder: (_, child, prog) {
-                                      if (prog == null) return child;
-                                      return const Center(
-                                        child: SizedBox(
-                                          width: 24, height: 24,
-                                          child: CircularProgressIndicator(
-                                            color: AppColors.primary,
-                                            strokeWidth: 2,
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: .68,
+                ),
+                itemCount: _filtered.length,
+                itemBuilder: (_, i) {
+                  final p = _filtered[i];
+                  return GlowCard(
+                    padding: const EdgeInsets.all(12),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ProductDetailScreen(product: p))),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: double.infinity,
+                              color: AppColors.primarySoft.withValues(alpha: .35),
+                              alignment: Alignment.center,
+                              child: p.imageUrl.isNotEmpty
+                                  ? Image.network(
+                                      p.imageUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      loadingBuilder: (_, child, prog) {
+                                        if (prog == null) return child;
+                                        return const Center(
+                                          child: SizedBox(
+                                            width: 24, height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: AppColors.primary,
+                                              strokeWidth: 2,
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (_, __, ___) => Text(
-                                      p.emoji,
-                                      style: const TextStyle(fontSize: 52),
-                                    ),
-                                  )
-                                : Text(p.emoji,
-                                    style: const TextStyle(fontSize: 52)),
+                                        );
+                                      },
+                                      errorBuilder: (_, __, ___) => Text(
+                                        p.emoji,
+                                        style: const TextStyle(fontSize: 52),
+                                      ),
+                                    )
+                                  : Text(p.emoji,
+                                      style: const TextStyle(fontSize: 52)),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(p.category,
-                          style: tt.bodySmall?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600)),
-                      Text(p.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              size: 14, color: Colors.amber),
-                          Text(' ${p.rating}',
-                              style: tt.bodySmall),
-                          const Spacer(),
-                          Text('Rp${(p.price/1000).toStringAsFixed(0)}K',
-                              style: tt.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary)),
-                        ],
-                      )
-                    ],
-                  ),
-                );
-              },
-            ),
-          )
-        ],
+                        const SizedBox(height: 8),
+                        Text(p.category,
+                            style: tt.bodySmall?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600)),
+                        Text(p.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.star_rounded,
+                                size: 14, color: Colors.amber),
+                            Text(' ${p.rating}',
+                                style: tt.bodySmall),
+                            const Spacer(),
+                            Text('Rp${(p.price/1000).toStringAsFixed(0)}K',
+                                style: tt.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary)),
+                          ],
+                        )
+                      ],
+                    ),
+                  );
+                },
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

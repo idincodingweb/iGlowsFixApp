@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../services/app_update_service.dart';
+import '../../widgets/app_update_dialog.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/routines_tab.dart';
 import 'tabs/analyzer_tab.dart';
@@ -16,6 +18,21 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
+  bool _updateChecked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAppUpdate());
+  }
+
+  Future<void> _checkAppUpdate() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    final info = await AppUpdateService.instance.fetchLatest();
+    if (!mounted || info == null || !info.isNewer) return;
+    await AppUpdateDialog.show(context, info);
+  }
 
   static const List<Widget> _tabs = <Widget>[
     HomeTab(),
